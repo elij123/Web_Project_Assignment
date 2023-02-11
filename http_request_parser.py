@@ -2,7 +2,7 @@ import re
 
 server_minor_ver = None
 
-
+# Parses HTTP request
 def http_request_message(input_http_str: str):
     if input_http_str.find("\r\n") != -1:
         str_segments = input_http_str.split("\r\n")
@@ -14,6 +14,7 @@ def http_request_message(input_http_str: str):
         raise Exception("Invalid Syntax")
 
 
+# Parses HTTP Request Line
 def request_line_http(input_str: str):
     if input_str.find(" ") != -1:
         str_segments = input_str.split(" ")
@@ -22,6 +23,7 @@ def request_line_http(input_str: str):
         http_version(str_segments[2].rstrip())
 
 
+# TODO: Add HTTP responses
 def http_method(input: str):
     if re.match("[\w]+", input) != None:
         if input == "GET":
@@ -40,6 +42,7 @@ def http_method(input: str):
         raise Exception("Invalid Method")
 
 
+# Parses URI from request line
 def request_target(input_str: str):
     if re.match("/", input_str) != None:
         if input_str == "/":
@@ -64,6 +67,7 @@ def request_target(input_str: str):
         raise Exception("Invalid syntax")
 
 
+# Parses http version
 def http_version(input_str: str):
     global server_minor_ver
     if re.match("[\w]+/[\d].[\d]", input_str) != None:
@@ -78,6 +82,7 @@ def http_version(input_str: str):
         server_minor_ver = version_no_seg[1]
 
 
+# Parsing Header fie;d
 def header_http(header_field_list: list):
     http_headers_dict = {}
     host_str = None
@@ -88,6 +93,7 @@ def header_http(header_field_list: list):
             temp = header_field.split(":")
             temp[1] = temp[1].strip()
             if host_str == None:
+                # Checks for existence of 'host' header field
                 host_str = re.match("host", temp[0], re.IGNORECASE)
             http_headers_dict[temp[0]] = temp[1]
 
