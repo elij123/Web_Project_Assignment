@@ -1,115 +1,103 @@
 import re
 
-def http_request_message(input_http_str:str):
-    str_segments = input_http_str.split("\r\n")
-    segment_no = len(str_segments)
-    request_line_http(str_segments[0])
-    header_http(str_segments[1:segment_no-1])
-    # request_body_http = str_segments[segment_no-1] 
+server_minor_ver = None
 
-def request_line_http(input_str:str):
-    str_segments = input_str.split(" ")
-    http_method(str_segments[0])
-    request_target(str_segments[1])
-    http_version(str_segments[2].rstrip())
 
-def http_method(input:str):
-    if input == "GET":
-        pass
-    elif input == "POST":
-        pass
-    elif input == "PUT":
-        pass
-    elif input == "DELETE":
-        pass
-    elif input == "HEAD":
-        pass
+def http_request_message(input_http_str: str):
+    if input_http_str.find("\r\n") != -1:
+        str_segments = input_http_str.split("\r\n")
+        segment_no = len(str_segments)
+        request_line_http(str_segments[0])
+        header_http(str_segments[1 : segment_no - 2])
+        body = str_segments[segment_no - 1]
+    else:
+        raise Exception("Invalid Syntax")
+
+
+def request_line_http(input_str: str):
+    if input_str.find(" ") != -1:
+        str_segments = input_str.split(" ")
+        http_method(str_segments[0])
+        request_target(str_segments[1])
+        http_version(str_segments[2].rstrip())
+
+
+def http_method(input: str):
+    if re.match("[\w]+", input) != None:
+        if input == "GET":
+            pass
+        elif input == "POST":
+            pass
+        elif input == "PUT":
+            pass
+        elif input == "DELETE":
+            pass
+        elif input == "HEAD":
+            pass
+        else:
+            raise Exception("Invalid Method")
     else:
         raise Exception("Invalid Method")
 
-def request_target(input_str:str):
-    if input_str == "/":
-        pass
-    else:
-        absolute_path_pattern = re.compile("(/[\w]+)+")
-        query_pattern = re.compile("(\?([\w]+)=([\w]+))")
-        pass
 
-def http_version(input_str:str):
-    segments = input_str.split("/")
-    name = segments[0]
-    version_no = segments[1]
-    if name == "HTTP":
-        pass
-    if version_no == "1.1" or version_no == "1.0":
-        pass
-
-def header_http(input_str:list):
-    host_ = re.compile("host", flags=re.IGNORECASE)
-    cache_control = re.compile("Cache-Control", flags=re.IGNORECASE)
-    expect = re.compile("Expect", re.IGNORECASE)
-    max_forwards = re.compile("Max-Forwards", flags=re.IGNORECASE)
-    pragma = re.compile("pragma", flags=re.IGNORECASE)
-    range_ = re.compile("range", flags=re.IGNORECASE)
-    TE = re.compile("TE", flags=re.IGNORECASE)
-    If_match = re.compile("If-match", flags=re.IGNORECASE)
-    If_none_match = re.compile("If-None-Match", flags=re.IGNORECASE)
-    If_Modified_Since = re.compile("If-Modified-Since", flags=re.IGNORECASE)
-    If_Unmodified_Since = re.compile("If-Unmodified-Since", flags=re.IGNORECASE)
-    If_Range = re.compile("If-Range", flags=re.IGNORECASE)
-    Accept = re.compile("Accept", re.IGNORECASE)
-    Accept_Charset = re.compile("Accept-Charset", flags=re.IGNORECASE)
-    Accept_Encoding = re.compile("Accept-Encoding", flags=re.IGNORECASE)
-    Accept_Language = re.compile("Accept-Language", flags=re.IGNORECASE)
-    Authorization = re.compile("Authorization", flags=re.IGNORECASE)
-    Proxy_Authorization = re.compile("Proxy-Authorization", re.IGNORECASE)
-    From = re.compile("From", flags=re.IGNORECASE)
-    Referer = re.compile("Referer", flags=re.IGNORECASE)
-    User_Agent = re.compile("User-Agent", flags=re.IGNORECASE)
-
-
-    for header_line in input_str:
-        if re.match(host_, header_line):
-            pass
-        elif re.match(cache_control, header_line):
-            pass
-        elif re.match(expect, header_line):
-            pass
-        elif re.match(max_forwards, header_line):
-            pass
-        elif re.match(pragma, header_line):
-            pass
-        elif re.match(range_, header_line):
-            pass
-        elif re.match(TE, header_line):
-            pass
-        elif re.match(If_match, header_line):
-            pass
-        elif re.match(If_none_match, header_line):
-            pass
-        elif re.match(If_Modified_Since, header_line):
-            pass
-        elif re.match(If_Unmodified_Since, header_line):
-            pass
-        elif re.match(If_Range, header_line):
-            pass
-        elif re.match(Accept, header_line):
-            pass
-        elif re.match(Accept_Charset, header_line):
-            pass
-        elif re.match(Accept_Encoding, header_line):
-            pass
-        elif re.match(Accept_Language, header_line):
-            pass
-        elif re.match(Authorization, header_line):
-            pass
-        elif re.match(Proxy_Authorization, header_line):
-            pass
-        elif re.match(From, header_line):
-            pass
-        elif re.match(Referer, header_line):
-            pass
-        elif re.match(User_Agent, header_line):
+def request_target(input_str: str):
+    if re.match("/", input_str) != None:
+        if input_str == "/":
             pass
         else:
+            if input_str.find("?") != -1:
+                input_str_seg = input_str.split("?")
+                URI_path = input_str_seg[0]
+                query_str = input_str_seg[1]
+                if re.match("(/[\S]+)+/?", URI_path) == None:
+                    raise Exception("Invalid syntax")
+                if query_str.find("&") != -1:
+                    query_str_seg = query_str.split("&")
+                    for query_pair in query_str_seg:
+                        if re.match("([\S]+)=([\S]+)", query_pair) == None:
+                            raise Exception("Invalid syntax")
+            else:
+                URI_path = input_str
+                if re.match("(/[\S]+)+/?", URI_path) == None:
+                    raise Exception("Invalid syntax")
+    else:
+        raise Exception("Invalid syntax")
+
+
+def http_version(input_str: str):
+    global server_minor_ver
+    if re.match("[\w]+/[\d].[\d]", input_str) != None:
+        segments = input_str.split("/")
+        name = segments[0]
+        version_no = segments[1]
+        if name != "HTTP":
+            raise Exception("Invalid Protocol")
+        version_no_seg = version_no.split(".")
+        if int(version_no_seg[0]) > 1:
+            raise Exception("Invalid version")
+        server_minor_ver = version_no_seg[1]
+
+
+# Redefine \S as token RFC definition
+# Redefine raised exceptions
+def header_http(header_field_list: list):
+    http_headers_dict = {}
+    host_str = None
+    for header_field in header_field_list:
+        if re.match("[\S]+:( |\t)*[\S]+( |\t)*", header_field) == None:
             raise Exception("Invalid Header field")
+        else:
+            temp = header_field.split(":")
+            temp[1] = temp[1].strip()
+            if host_str == None:
+                host_str = re.match("host", temp[0], re.IGNORECASE)
+            http_headers_dict[temp[0]] = temp[1]
+
+    if host_str == None:
+        raise Exception("Bad Request")
+    if re.match("[\S]+(:[\d]+)?", http_headers_dict[host_str]) == None:
+        raise Exception("Invalid Host")
+
+
+def http_response(method_str: int):
+    pass
