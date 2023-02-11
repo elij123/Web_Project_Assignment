@@ -78,8 +78,6 @@ def http_version(input_str: str):
         server_minor_ver = version_no_seg[1]
 
 
-# Redefine \S as token RFC definition
-# Redefine raised exceptions
 def header_http(header_field_list: list):
     http_headers_dict = {}
     host_str = None
