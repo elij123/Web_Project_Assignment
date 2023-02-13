@@ -1,18 +1,19 @@
 import re
+import typer
 
-server_minor_ver = None
+server_minor_ver = 1
+head_flag = 0
 token_regex = re.compile("[!#$%&’*+\-.^‘|~\w]+", re.ASCII)
+# Regex foe the URI in the request
 absolute_path_regex = re.compile(
     "(/ ( [\w.\-~] | [%][0-9A-Fa-f][0-9A-Fa-f] | [!$&'()*+,;=] |\
      [:] | [@] )* )+",
     re.X,
-    re.ASCII,
 )
 query_regex = re.compile(
     "( [\w.\-~] | [%][0-9A-Fa-f][0-9A-Fa-f] | [!$&'()*+,;=] |\
      [:] | [@] | [/] | [?] )*",
     re.X,
-    re.ASCII,
 )
 body_index = None
 http_response_to_send = None
@@ -38,6 +39,14 @@ def http_request_message(input_http_str: str):
         http_response_to_send = http_response_400()
     except:
         http_response_to_send = http_response_500()
+    finally:
+        pass
+    # Sends the 200 OK response if no exceptions are thrown
+    if http_response_to_send == None:
+        if head_flag:
+            http_response_to_send = http_response_200_head()
+        else:
+            http_response_to_send = http_response_200()
 
 
 # Parses HTTP Request Line
@@ -49,26 +58,23 @@ def request_start_line_http(input_str: str):
         http_version(str_segments[2])
 
 
-# TODO: Add HTTP responses
+# HTTP responses for different HTTP request
 def http_method(input: str):
     global http_response_to_send
+    global head_flag
     try:
         if re.fullmatch(token_regex, input) != None:
             if input == "GET":
-                if http_response_to_send == None:
-                    http_response_to_send = http_response_200()
+                pass
             elif input == "POST":
-                if http_response_to_send == None:
-                    http_response_to_send = http_response_200()
+                pass
             elif input == "PUT":
-                if http_response_to_send == None:
-                    http_response_to_send = http_response_200()
+                pass
             elif input == "DELETE":
-                if http_response_to_send == None:
-                    http_response_to_send = http_response_200()
+                pass
             elif input == "HEAD":
-                if http_response_to_send == None:
-                    http_response_to_send = http_response_200_head()
+                # Sets the flag to send the response for HEAD request
+                head_flag = 1
             else:
                 raise BadRequestException
         else:
@@ -77,6 +83,8 @@ def http_method(input: str):
         http_response_to_send = http_response_400()
     except:
         http_response_to_send = http_response_500()
+    finally:
+        pass
 
 
 # Parses URI from request line
@@ -105,13 +113,15 @@ def request_target(input_str: str):
         http_response_to_send = http_response_400()
     except:
         http_response_to_send = http_response_500()
+    finally:
+        pass
 
 
 # Parses http version
 def http_version(input_str: str):
     global http_response_to_send
+    global server_minor_ver
     try:
-        global server_minor_ver
         if re.fullmatch("HTTP/[\d].[\d]", input_str, re.ASCII) != None:
             segments = input_str.split("/")
             version_no = segments[1]
@@ -125,9 +135,12 @@ def http_version(input_str: str):
         http_response_to_send = http_response_400()
     except:
         http_response_to_send = http_response_500()
+    finally:
+        pass
 
 
 def host_name_verify(name):
+    # Grammar for the hostname of the Host field
     h16 = "[0-9A-Fa-f]{1,4}"
     dec_octet = "([0-9]|[1-9][0-9]|[1][0-9][0-9]|[2][0-4][0-9]|[2][5][0-5])"
     IPv4addr = f"{dec_octet}.{dec_octet}.{dec_octet}.{dec_octet}"
@@ -151,6 +164,7 @@ def host_name_verify(name):
 
 
 def host_port_verify(port_no):
+    # Grammar for the port number of the Host field
     port = re.compile("[\d]*", re.ASCII)
     return re.match(port, port_no)
 
@@ -178,7 +192,7 @@ def header_block_http(header_block_str: str):
                 temp = header_temp_str.split(":")
                 if host_str == None:
                     # Checks for existence of 'host' header field
-                    host_str = re.match("host", temp[0], re.IGNORECASE)
+                    host_str = re.match("host", temp[0], re.IGNORECASE).string
                 http_headers_dict[temp[0]] = temp[1]
             # Checks for second CRLF to indicate end of header block
             if header_block_str[header_CRLF_index + 2 : header_CRLF_index + 4] == CRLF:
@@ -196,8 +210,11 @@ def header_block_http(header_block_str: str):
             host_seg = http_headers_dict[host_str].split(":")
             name = host_seg[0]
             port = host_seg[1]
-            host_name_verify(name)
-            host_port_verify(port)
+            # Checks the syntax of the host header field for hostname and port
+            if host_name_verify(name) == None:
+                raise BadRequestException
+            if host_port_verify(port) == None:
+                raise BadRequestException
         elif http_headers_dict[host_str].find(":") == -1:
             name = http_headers_dict[host_str]
             host_name_verify(name)
@@ -207,44 +224,39 @@ def header_block_http(header_block_str: str):
         http_response_to_send = http_response_400()
     except:
         http_response_to_send = http_response_500()
+    finally:
+        pass
 
 
+# HTTP responses for 200(OK), 400(Bad Request) & 500 (Internal Server error)
 def http_response_200():
-    resp = f"HTTP/1.{server_minor_ver} 200 OK\r\n\
-        Server: Apache/2.4.54 (Unix)\r\n\
-        Content-Location: index.html.en\r\n\
-        Accept-Ranges: bytes\r\n\
-        Content-Length: 45\r\n\
-        Content-Type: text/html\r\n\r\n\
-        <html><body><h1>It works!</h1></body></html>"
+    resp = f"HTTP/1.{server_minor_ver} 200 OK\r\nServer: Apache/2.4.54 (Unix)\r\nContent-Location: index.html.en\r\n\Accept-Ranges: bytes\r\nContent-Length: 45\r\nContent-Type: text/html\r\n\r\n<html><body><h1>It works!</h1></body></html>"
     return resp
 
 
 def http_response_400():
-    resp = f"HTTP/1.{server_minor_ver} 400 Bad Request\r\n\
-        Server: Apache/2.4.54 (Unix)\r\n\
-            Content-Length: 226\r\n\
-                Connection: close\r\n\
-                    Content-Type: text/html; charset=iso-8859-1\r\n\r\n\
-                        <html><body><h1>400:Bad Request</h1></body></html>"
+    resp = f"HTTP/1.{server_minor_ver} 400 Bad Request\r\nServer: Apache/2.4.54 (Unix)\r\nContent-Length: 226\r\nConnection: close\r\nContent-Type: text/html; charset=iso-8859-1\r\n\r\n<html><body><h1>400:Bad Request</h1></body></html>"
     return resp
 
 
 def http_response_200_head():
-    resp = f"HTTP/1.{server_minor_ver} 200 OK\r\n\
-        Server: Apache/2.4.54 (Unix)\r\n\
-        Content-Location: index.html.en\r\n\
-        Accept-Ranges: bytes\r\n\
-        Content-Length: 45\r\n\
-        Content-Type: text/html\r\n\r\n"
+    resp = f"HTTP/1.{server_minor_ver} 200 OK\r\nServer: Apache/2.4.54 (Unix)\r\nContent-Location: index.html.en\r\nAccept-Ranges: bytes\r\nContent-Length: 45\r\nContent-Type: text/html\r\n\r\n"
     return resp
 
 
 def http_response_500():
-    resp = f"HTTP/1.{server_minor_ver} 500 Internal Server Error\r\n\
-        Server: Apache/2.4.54 (Unix)\r\n\
-            Content-Length: 226\r\n\
-                Connection: close\r\n\
-                    Content-Type: text/html; charset=iso-8859-1\r\n\r\n\
-                        <html><body><h1>500: Internal Server Error</h1></body></html>"
+    resp = f"HTTP/1.{server_minor_ver} 500 Internal Server Error\r\nServer: Apache/2.4.54 (Unix)\r\nContent-Length: 226\r\nConnection: close\r\nContent-Type: text/html; charset=iso-8859-1\r\n\r\n<html><body><h1>500: Internal Server Error</h1></body></html>"
     return resp
+
+
+# Accepts a file name from the user
+def main(file_name: str):
+
+    with open(file_name, "rb") as http_request_txt:
+        request_text = http_request_txt.read().decode("UTF-8")
+        http_request_message(request_text)
+        print(http_response_to_send)
+
+
+if __name__ == "__main__":
+    typer.run(main)
