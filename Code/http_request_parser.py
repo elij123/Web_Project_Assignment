@@ -3,8 +3,13 @@ import typer
 import socket
 import threading
 import warnings
+import pytz
 import ssl
+import sys
+import os
+from datetime import datetime
 
+tz_NY = pytz.timezone("America/New_York")
 server_minor_ver = 1
 head_flag = 0
 token_regex = re.compile("[!#$%&’*+\-.^‘|~\w]+", re.ASCII)
@@ -22,48 +27,6 @@ query_regex = re.compile(
 body_index = None
 http_response_to_send = None
 CRLF = "\r\n"
-
-    # Creates an TCP socket using IPv4 address
-server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-
-#Creates a HTTP connection
-if http_type == "http":
-    server.bind(("localhost",80))
-    server.listen(5)
-    while True:
-        conn,addr = server.accept()
-
-
-    # client.send(resq.encode("UTF-8"))
-    # temp = client.recv(2048)
-    # while temp:
-    #     resp += temp.decode("UTF-8")
-    #     temp = client.recv(2048)
-    # client.close()
-
-#Creates a HTTPS connenction
-elif http_type == "https":
-    #Ignores the Deprecation warning thrown by using PROTOCOL_TLSv1_2
-    with warnings.catch_warnings(): 
-        warnings.simplefilter(action="ignore", category=DeprecationWarning)
-        context = ssl.SSLContext(ssl.PROTOCOL_TLSv1_2)
-    ssl_client = context.wrap_socket(client, server_hostname=host)
-    ssl_client.connect((host,443))
-    ssl_client.send(req.encode("UTF-8"))
-    temp = ssl_client.recv(2048)
-    while temp:
-        resp += temp.decode("UTF-8")
-        temp = ssl_client.recv(2048)
-    ssl_client.close()
-
-def https_conn_handler(conn):
-    with warnings.catch_warnings(): 
-        warnings.simplefilter(action="ignore", category=DeprecationWarning)
-        context = ssl.SSLContext(ssl.PROTOCOL_TLSv1_2)
-    context.verify_mode=ssl.CERT_NONE
-    context.load_cert_chain
-
-
 
 
 class BadRequestException(Exception):
@@ -274,34 +237,113 @@ def header_block_http(header_block_str: str):
         pass
 
 
-# HTTP responses for 200(OK), 400(Bad Request) & 500 (Internal Server error)
+# HTTP responses for 200(OK)
 def http_response_200():
     resp = f"HTTP/1.{server_minor_ver} 200 OK\r\nServer: Apache/2.4.54 (Unix)\r\nContent-Location: index.html.en\r\n\Accept-Ranges: bytes\r\nContent-Length: 45\r\nContent-Type: text/html\r\n\r\n<html><body><h1>It works!</h1></body></html>"
     return resp
 
 
+# Bad Request
 def http_response_400():
     resp = f"HTTP/1.{server_minor_ver} 400 Bad Request\r\nServer: Apache/2.4.54 (Unix)\r\nContent-Length: 226\r\nConnection: close\r\nContent-Type: text/html; charset=iso-8859-1\r\n\r\n<html><body><h1>400:Bad Request</h1></body></html>"
     return resp
 
 
+# HTTP HEAD Response
 def http_response_200_head():
     resp = f"HTTP/1.{server_minor_ver} 200 OK\r\nServer: Apache/2.4.54 (Unix)\r\nContent-Location: index.html.en\r\nAccept-Ranges: bytes\r\nContent-Length: 45\r\nContent-Type: text/html\r\n\r\n"
     return resp
 
 
+# Internal Server Error
 def http_response_500():
     resp = f"HTTP/1.{server_minor_ver} 500 Internal Server Error\r\nServer: Apache/2.4.54 (Unix)\r\nContent-Length: 226\r\nConnection: close\r\nContent-Type: text/html; charset=iso-8859-1\r\n\r\n<html><body><h1>500: Internal Server Error</h1></body></html>"
     return resp
 
 
-# Accepts a file name from the user
-def main(file_name: str):
+# PUT success code
+def http_response_201():
+    pass
 
-    with open(file_name, "rb") as http_request_txt:
-        request_text = http_request_txt.read().decode("UTF-8")
-        http_request_message(request_text)
-        print(http_response_to_send)
+
+# No Permission to access file
+def http_response_403():
+    pass
+
+
+# Not Found
+def http_response_404():
+    pass
+
+
+# Method Not Implemented
+def http_response_501():
+    pass
+
+
+# Version not supported
+def http_response_505():
+    pass
+
+
+def https_conn_handler(conn, x509, privatekey):
+    with warnings.catch_warnings():
+        warnings.simplefilter(action="ignore", category=DeprecationWarning)
+        context = ssl.SSLContext(ssl.PROTOCOL_TLSv1_2)
+    context.verify_mode = ssl.CERT_NONE
+    context.load_cert_chain(
+        certfile="./project.crt", keyfile="./project.key", password=None
+    )
+    tls_conn = context.wrap_socket(conn, server_side=True)
+    resp = None
+    tls_conn.send(resp.encode("UTF-8"))
+    tls_conn.close()
+
+
+def http_conn_handler(conn):
+    resp = None
+    conn.send(resp.encode("UTF-8"))
+    conn.close()
+
+
+def http_request_logger(request):
+    with open("http_log.txt", "w") as http_log:
+        if request.find(CRLF) != -1:
+            datetime_NY = datetime.now(tz_NY)
+            datetime_NY_str = datetime_NY.strftime("%d %b, %Y", "%H:%M:%S")
+            http_log.write(datetime_NY_str + request[0, request.find(CRLF)])
+
+
+# Accepts a file name from the user
+def main(
+    ip_addr_listen: str,
+    port_listen: int,
+    x509_file_path: str = None,
+    private_key_path: str = None,
+):
+
+    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server.bind((ip_addr_listen, port_listen))
+    server.listen(5)
+    if x509_file_path:
+        if private_key_path:
+            while True:
+                conn, addr = server.accept()
+                t = threading.Thread(
+                    target=https_conn_handler,
+                    args=(conn, x509_file_path, private_key_path,),
+                )
+        else:
+            sys.exit(15)  # Private key not provided
+    else:
+        while True:
+            conn, addr = server.accept()
+            t = threading.Thread(target=http_conn_handler, args=(conn,))
+
+    # with open(file_name, "rb") as http_request_txt:
+    #     request_text = http_request_txt.read().decode("UTF-8")
+    #     http_request_message(request_text)
+    #     print(http_response_to_send)
 
 
 if __name__ == "__main__":
