@@ -4,7 +4,7 @@ import typer
 server_minor_ver = 1
 head_flag = 0
 token_regex = re.compile("[!#$%&’*+\-.^‘|~\w]+", re.ASCII)
-# Regex foe the URI in the request
+# Regex for the URI in the request
 absolute_path_regex = re.compile(
     "(/ ( [\w.\-~] | [%][0-9A-Fa-f][0-9A-Fa-f] | [!$&'()*+,;=] |\
      [:] | [@] )* )+",
