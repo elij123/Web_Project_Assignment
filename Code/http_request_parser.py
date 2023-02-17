@@ -1,5 +1,9 @@
 import re
 import typer
+import socket
+import threading
+import warnings
+import ssl
 
 server_minor_ver = 1
 head_flag = 0
@@ -18,6 +22,48 @@ query_regex = re.compile(
 body_index = None
 http_response_to_send = None
 CRLF = "\r\n"
+
+    # Creates an TCP socket using IPv4 address
+server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+#Creates a HTTP connection
+if http_type == "http":
+    server.bind(("localhost",80))
+    server.listen(5)
+    while True:
+        conn,addr = server.accept()
+
+
+    # client.send(resq.encode("UTF-8"))
+    # temp = client.recv(2048)
+    # while temp:
+    #     resp += temp.decode("UTF-8")
+    #     temp = client.recv(2048)
+    # client.close()
+
+#Creates a HTTPS connenction
+elif http_type == "https":
+    #Ignores the Deprecation warning thrown by using PROTOCOL_TLSv1_2
+    with warnings.catch_warnings(): 
+        warnings.simplefilter(action="ignore", category=DeprecationWarning)
+        context = ssl.SSLContext(ssl.PROTOCOL_TLSv1_2)
+    ssl_client = context.wrap_socket(client, server_hostname=host)
+    ssl_client.connect((host,443))
+    ssl_client.send(req.encode("UTF-8"))
+    temp = ssl_client.recv(2048)
+    while temp:
+        resp += temp.decode("UTF-8")
+        temp = ssl_client.recv(2048)
+    ssl_client.close()
+
+def https_conn_handler(conn):
+    with warnings.catch_warnings(): 
+        warnings.simplefilter(action="ignore", category=DeprecationWarning)
+        context = ssl.SSLContext(ssl.PROTOCOL_TLSv1_2)
+    context.verify_mode=ssl.CERT_NONE
+    context.load_cert_chain
+
+
 
 
 class BadRequestException(Exception):
