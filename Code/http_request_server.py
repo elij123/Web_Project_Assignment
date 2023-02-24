@@ -253,6 +253,7 @@ def host_port_verify(port_no):
     return re.fullmatch(port, port_no)
 
 
+# Running PHP for POST request
 def php_exec_post(php_fname, length, body_php):
     subprocess.run(["export", "GATEWAY_INTERFACE='CGI/1.1'"])
     subprocess.run(["export", "SERVER_PROTOCOL='HTTP/1.1'"])
@@ -264,15 +265,18 @@ def php_exec_post(php_fname, length, body_php):
     subprocess.run(["export", f"CONTENT_TYPE='application/x-www-form-urlencoded'"])
     out = subprocess.run(
         ["exec", "echo", "'$BODY'", "|", "php-cgi"], capture_output=True, text=True
-    ).stdout.split(CRLF)
+    ).stdout.split(CRLF + CRLF)
     content_type_out = out[0]
     body_out = out[1]
     return (content_type_out, body_out)
 
 
+# Running PHP for GET request
 def php_exec_get(php_fname, php_query):
     cmd_str = ["php-cgi", f"{php_fname}"] + php_query.split("&")
-    out = subprocess.run(cmd_str, capture_output=True, text=True).stdout.split(CRLF)
+    out = subprocess.run(cmd_str, capture_output=True, text=True).stdout.split(
+        CRLF + CRLF
+    )
     content_type_out = out[0]
     body_out = out[1]
     return (content_type_out, body_out)
