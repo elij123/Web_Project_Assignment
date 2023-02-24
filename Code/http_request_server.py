@@ -7,6 +7,7 @@ import pytz
 import ssl
 import sys
 import os
+import subprocess
 from datetime import datetime
 
 # Grammar for the hostname of the Host field
@@ -36,8 +37,6 @@ port = re.compile("[\d]*", re.ASCII)
 tz_NY = pytz.timezone("America/New_York")
 # Minor HTTP version
 server_minor_ver = 1
-# Global flag for HEAD HTTP method
-http_head_flag = 0
 token_regex = re.compile("[!#$%&’*+\-.^‘|~\w]+", re.ASCII)
 # Regex for the URI in the request
 absolute_path_regex = re.compile(
@@ -46,8 +45,10 @@ absolute_path_regex = re.compile(
 query_regex = re.compile(
     "([\w.\-~]|[%][0-9A-Fa-f][0-9A-Fa-f]|[!$&'()*+,;=]|[:]|[@]|[/]|[?])*", re.ASCII,
 )
-body_index = None
+http_body = None
 http_response_to_send = None
+http_request_method = None
+http_filepath = None
 CRLF = "\r\n"
 
 # Defining exceptions for HTTP errors
@@ -63,6 +64,14 @@ class MethodNotImplemented(Exception):
     print("The HTTP method in the request is not supported")
 
 
+# Logger
+def http_request_logger(request_line):
+    with open("http_log.txt", "wb") as http_log:
+        datetime_NY = datetime.now(tz_NY)
+        datetime_NY_str = datetime_NY.strftime("%d %b, %Y", "%H:%M:%S")
+        http_log.write(bytes(datetime_NY_str + "HTTP Request " + request_line))
+
+
 # Parses HTTP request
 def http_request_message(input_http_str: str):
     global http_response_to_send
@@ -71,11 +80,6 @@ def http_request_message(input_http_str: str):
         request_start_line_http(input_http_str[:first_CRLF])
         header_block_http(input_http_str[first_CRLF + 2 :])
     return http_response_to_send
-    # if http_response_to_send == None:
-    #     if http_head_flag:
-    #         http_response_to_send = http_response_200_head()
-    #     else:
-    #         http_response_to_send = http_response_200()
 
 
 # Parses HTTP Request Line
@@ -85,44 +89,45 @@ def request_start_line_http(input_str: str):
         http_method(str_segments[0])
         request_target(str_segments[1])
         http_version(str_segments[2])
+        http_request_logger(input_str)
 
 
 # HTTP responses for different HTTP request
 def http_method(input: str):
     global http_response_to_send
-    global http_head_flag
+    global http_request_method
     try:
         if re.fullmatch(token_regex, input) != None:
             if input == "GET":
-                pass
+                http_request_method = GET_request
             elif input == "POST":
-                pass
+                http_request_method = POST_request
             elif input == "PUT":
-                pass
+                http_request_method = PUT_request
             elif input == "DELETE":
-                pass
+                http_request_method = DELETE_request
             elif input == "HEAD":
-                # Sets the flag to send the response for HEAD request
-                http_head_flag = 1
+                http_request_method = HEAD_request
             else:
                 raise MethodNotImplemented
         else:
             raise BadRequestException
     except BadRequestException:
         http_response_to_send = http_response_400()
+    except MethodNotImplemented:
+        http_response_to_send = http_response_501()
     except:
         http_response_to_send = http_response_500()
-    finally:
-        pass
 
 
 # Parses URI from request line
 def request_target(input_str: str):
     global http_response_to_send
+    global http_filepath
     try:
         if re.match("/", input_str) != None:
             if input_str == "/":
-                pass
+                input_str = "/index.html"
             else:
                 if input_str.find("?") != -1:
                     input_str_seg = input_str.split("?")
@@ -136,14 +141,13 @@ def request_target(input_str: str):
                     URI_path = input_str
                     if re.fullmatch(absolute_path_regex, URI_path) == None:
                         raise BadRequestException
+            http_filepath = input_str
         else:
             raise BadRequestException
     except BadRequestException:
         http_response_to_send = http_response_400()
     except:
         http_response_to_send = http_response_500()
-    finally:
-        pass
 
 
 # Parses http version
@@ -166,16 +170,19 @@ def http_version(input_str: str):
             raise BadRequestException
     except BadRequestException:
         http_response_to_send = http_response_400()
+    except VersionNotSupported:
+        http_response_to_send = http_response_505()
     except:
         http_response_to_send = http_response_500()
-    finally:
-        pass
 
 
 # Parses Header field
 def header_block_http(header_block_str: str):
+    global http_filepath
     global http_response_to_send
-    global body_index
+    global http_body
+    global http_request_method
+    body_index = None
     http_headers_dict = {}
     host_str = None
     header_CRLF_index = header_block_str.find(CRLF)
@@ -200,6 +207,8 @@ def header_block_http(header_block_str: str):
             # Checks for second CRLF to indicate end of header block
             if header_block_str[header_CRLF_index + 2 : header_CRLF_index + 4] == CRLF:
                 body_index = header_CRLF_index + 4
+                http_body = header_block_str[body_index:]
+                http_body = http_body.rstrip()
                 break
             else:
                 # Shifting the overall header string forward to position right after
@@ -223,12 +232,13 @@ def header_block_http(header_block_str: str):
             host_name_verify(name)
         else:
             raise BadRequestException
+        http_response_to_send = http_request_method(
+            http_filepath, http_headers_dict, http_response_to_send, http_body
+        )
     except BadRequestException:
         http_response_to_send = http_response_400()
     except:
         http_response_to_send = http_response_500()
-    finally:
-        pass
 
 
 def host_name_verify(name):
@@ -240,87 +250,182 @@ def host_port_verify(port_no):
 
 
 # Request Methods
-def GET_request(filepath):
+def GET_request(filepath, headers_dict, response):
+    if response != None:
+        return response
     try:
-        requested_file = open(filepath, "r")
+        filepath_seg = filepath.split("/")
+        filename_seg = filepath_seg[len(filepath_seg) - 1].split(".")
+        file_ext = filename_seg[len(filename_seg) - 1]
+        if file_ext.lower() != "php":
+            requested_file = open(filepath, "rb")
+            resp_body = requested_file.read().decode("UTF-8").rstrip()
+            response = http_response_200(resp_body, len(resp_body))
+        else:
+            # php_output = subprocess.run(["php-cgi",], capture_output=True, text=True)
+            # print(result.stdout)
+            pass
     except FileNotFoundError:
+        requested_file.close()
         print("The file requested is not found")
-        http_response_404()
+        response = http_response_404()
+        return response
     except PermissionError:
+        requested_file.close()
         print("Not Allowed to access the file")
-        http_response_403()
+        response = http_response_403()
+        return response
     except:
-        http_response_500()
+        requested_file.close()
+        response = http_response_500()
+        return response
     else:
         requested_file.read()
         requested_file.close()
-    pass
+        return response
 
 
-def PUT_request(filepath, content):
+def PUT_request(filepath, headers_dict, response, body):
+    if response != None:
+        return response
     try:
-        requested_file = open(filepath, "w")
+        if os.access(filepath, os.F_OK):
+            requested_file = open(filepath, "wb")
+            requested_file.write(bytes(body))
+            requested_file.close()
+            response = http_response_204()
+        else:
+            requested_file = open(filepath, "wb")
+            requested_file.write(bytes(body))
+            requested_file.close()
+            response = http_response_201()
+        return response
+    except PermissionError:
+        requested_file.close()
+        print("Not Allowed to access the file")
+        response = http_response_403()
+        return response
+    except:
+        requested_file.close()
+        response = http_response_500()
+
+
+def POST_request(filepath, headers_dict, response, body):
+    if response != None:
+        return response
+    try:
+        # php_output = subprocess.run(["php-cgi",], capture_output=True, text=True)
+        # print(result.stdout)
+        pass
     except FileNotFoundError:
         print("The file requested is not found")
-        http_response_404()
+        response = http_response_404()
+        return response
     except PermissionError:
         print("Not Allowed to access the file")
-        http_response_403()
+        response = http_response_403()
+        return response
     except:
-        http_response_500()
+        response = http_response_500()
+        return response
     else:
-        requested_file.write(content)
-        requested_file.close()
+        response = http_response_200()
+        return response
 
 
-def POST_request():
-    pass
-
-
-def DELETE_request(filepath):
+def DELETE_request(filepath, headers_dict, response, body):
+    if response != None:
+        return response
     try:
         os.remove(filepath)
     except FileNotFoundError:
         print("The file requested is not found")
-        http_response_404()
+        response = http_response_404()
+        return response
     except PermissionError:
         print("Not Allowed to access the file")
-        http_response_403()
+        response = http_response_403()
+        return response
     except:
-        http_response_500()
+        response = http_response_500()
+        return response
+    else:
+        text = "File Deleted"
+        response = http_response_200(text, len(text))
+        return response
+
+
+def HEAD_request(filepath, headers_dict, response, body):
+    if response != None:
+        return response
+    try:
+        filepath_seg = filepath.split("/")
+        filename_seg = filepath_seg[len(filepath_seg) - 1].split(".")
+        file_ext = filename_seg[len(filename_seg) - 1]
+        if file_ext.lower() != "php":
+            requested_file = open(filepath, "rb")
+            resp_body = requested_file.read().decode("UTF-8").rstrip()
+            response = http_response_200_head(len(resp_body))
+        else:
+            # php_output = subprocess.run(["php-cgi",], capture_output=True, text=True)
+            # print(result.stdout)
+            pass
+    except FileNotFoundError:
+        requested_file.close()
+        print("The file requested is not found")
+        response = http_response_404()
+        return response
+    except PermissionError:
+        requested_file.close()
+        print("Not Allowed to access the file")
+        response = http_response_403()
+        return response
+    except:
+        requested_file.close()
+        response = http_response_500()
+        return response
+    else:
+        requested_file.read()
+        requested_file.close()
+        return response
 
 
 # HTTP responses for 200(OK)
-def http_response_200():
+def http_response_200(resp_body, body_len):
     resp = f"HTTP/1.{server_minor_ver} 200 OK\r\n"
-    resp += "Server: Apache/2.4.54 (Unix)\r\n"
-    resp += "Content-Location: index.html.en\r\n"
+    resp += "Python Custom Server/Ubuntu 22.04 LTS\r\n"
     resp += "Accept-Ranges: bytes\r\n"
-    resp += "Content-Length: 45\r\n"
+    resp += f"Content-Length: {body_len}\r\n"
     resp += "Content-Type: text/html\r\n\r\n"
-    resp += "<html><body><h1>It works!</h1></body></html>"
+    resp += resp_body
+    return resp
+
+
+# HTTP responses for 204 No Content
+def http_response_204():
+    resp = f"HTTP/1.{server_minor_ver} 204 No Content\r\n"
+    resp += "Python Custom Server/Ubuntu 22.04 LTS\r\n\r\n"
     return resp
 
 
 # Bad Request
 def http_response_400():
     resp = f"HTTP/1.{server_minor_ver} 400 Bad Request\r\n"
-    resp += "Server: Apache/2.4.54 (Unix)\r\n"
-    resp += "Content-Location: index.html.en\r\n"
-    resp += "Accept-Ranges: bytes\r\n"
-    resp += "Content-Length: 45\r\n"
-    resp += "Content-Type: text/html\r\n\r\n"
-    resp += "<html><body><h1>It works!</h1></body></html>"
+    resp += "Python Custom Server/Ubuntu 22.04 LTS\r\n"
+    text = "<html><body><h1>400: Bad Request</h1></body></html>"
+    resp += f"Content-Length: {len(text)}\r\n"
+    resp += "Connection: close\r\n"
+    resp += "Content-Type: text/html; charset=iso-8859-1\r\n\r\n"
+    resp += text
     return resp
 
 
 # HTTP HEAD Response
-def http_response_200_head():
+def http_response_200_head(body_len):
     resp = f"HTTP/1.{server_minor_ver} 200 OK\r\n"
-    resp += "Server: Apache/2.4.54 (Unix)\r\n"
-    resp += "Content-Location: index.html.en\r\n"
+    resp += "Python Custom Server/Ubuntu 22.04 LTS\r\n"
     resp += "Accept-Ranges: bytes\r\n"
-    resp += "Content-Length: 45\r\n"
+    resp += f"Content-Length: {body_len}\r\n"
     resp += "Content-Type: text/html\r\n\r\n"
     return resp
 
@@ -328,42 +433,85 @@ def http_response_200_head():
 # Internal Server Error
 def http_response_500():
     resp = f"HTTP/1.{server_minor_ver} 500 Internal Server Error\r\n"
-    resp += "Server: Apache/2.4.54 (Unix)\r\n"
-    resp += "Content-Length: 226\r\n"
+    resp += "Python Custom Server/Ubuntu 22.04 LTS\r\n"
+    text = "<html><body><h1>500: Internal Server Error</h1></body></html>"
+    resp += f"Content-Length: {len(text)}\r\n"
     resp += "Connection: close\r\n"
     resp += "Content-Type: text/html; charset=iso-8859-1\r\n\r\n"
-    resp += "<html><body><h1>500: Internal Server Error</h1></body></html>"
+    resp += text
     return resp
 
 
 # PUT success code
 def http_response_201():
-    pass
+    resp = f"HTTP/1.{server_minor_ver} 201 Created\r\n"
+    resp += "Python Custom Server/Ubuntu 22.04 LTS\r\n"
+    text = "<html><body><h1>File Created</h1></body></html>"
+    resp += "Accept-Ranges: bytes\r\n"
+    resp += f"Content-Length: {text}\r\n"
+    resp += "Content-Type: text/html\r\n\r\n"
+    resp += text
+    return resp
 
 
 # No Permission to access file
 def http_response_403():
-    pass
+    resp = f"HTTP/1.{server_minor_ver} 403 Access Denied\r\n"
+    resp += "Python Custom Server/Ubuntu 22.04 LTS\r\n"
+    text = "<html><body><h1>403 Access Denied</h1></body></html>"
+    resp += f"Content-Length: {len(text)}\r\n"
+    resp += "Connection: close\r\n"
+    resp += "Content-Type: text/html; charset=iso-8859-1\r\n\r\n"
+    resp += text
+    return resp
 
 
 # Not Found
 def http_response_404():
-    pass
+    resp = f"HTTP/1.{server_minor_ver} 404 Not Found\r\n"
+    resp += "Python Custom Server/Ubuntu 22.04 LTS\r\n"
+    text = "<html><body><h1>404 Not Found</h1></body></html>"
+    resp += f"Content-Length: {len(text)}\r\n"
+    resp += "Connection: close\r\n"
+    resp += "Content-Type: text/html; charset=iso-8859-1\r\n\r\n"
+    resp += text
+    return resp
 
 
 # POST - No Content Length
 def http_response_411():
-    pass
+    resp = f"HTTP/1.{server_minor_ver} 411 No Content Length\r\n"
+    resp += "Python Custom Server/Ubuntu 22.04 LTS\r\n"
+    text = "<html><body><h1>411 No Content Length Provided</h1></body></html>"
+    resp += f"Content-Length: {len(text)}\r\n"
+    resp += "Connection: close\r\n"
+    resp += "Content-Type: text/html; charset=iso-8859-1\r\n\r\n"
+    resp += text
+    return resp
 
 
 # HTTP Method Not Implemented
 def http_response_501():
-    pass
+    resp = f"HTTP/1.{server_minor_ver} 501 HTTP Method Not Supported\r\n"
+    resp += "Python Custom Server/Ubuntu 22.04 LTS\r\n"
+    text = "<html><body><h1>501 HTTP Method Not Supported</h1></body></html>"
+    resp += f"Content-Length: {len(text)}\r\n"
+    resp += "Connection: close\r\n"
+    resp += "Content-Type: text/html; charset=iso-8859-1\r\n\r\n"
+    resp += text
+    return resp
 
 
 # Version not supported
 def http_response_505():
-    pass
+    resp = f"HTTP/1.{server_minor_ver} 505 Version Not Supported\r\n"
+    resp += "Python Custom Server/Ubuntu 22.04 LTS\r\n"
+    text = "<html><body><h1>505 Version Not Supported</h1></body></html>"
+    resp += f"Content-Length: {len(text)}\r\n"
+    resp += "Connection: close\r\n"
+    resp += "Content-Type: text/html; charset=iso-8859-1\r\n\r\n"
+    resp += text
+    return resp
 
 
 def https_conn_handler(conn, x509, privatekey):
@@ -392,16 +540,6 @@ def http_conn_handler(conn):
     conn.close()
 
 
-# Logger
-def http_request_logger(request):
-    with open("http_log.txt", "w") as http_log:
-        if request.find(CRLF) != -1:
-            datetime_NY = datetime.now(tz_NY)
-            datetime_NY_str = datetime_NY.strftime("%d %b, %Y", "%H:%M:%S")
-            http_log.write(datetime_NY_str + request[0, request.find(CRLF)])
-
-
-# Accepts a file name from the user
 def main(
     ip_addr_listen: str,
     port_listen: int,
@@ -420,12 +558,14 @@ def main(
                     target=https_conn_handler,
                     args=(conn, x509_file_path, private_key_path,),
                 )
+                t.start()
         else:
             sys.exit(15)  # Private key not provided
     else:
         while True:
             conn, addr = server.accept()
             t = threading.Thread(target=http_conn_handler, args=(conn,))
+            t.start()
 
     # with open(file_name, "rb") as http_request_txt:
     #     request_text = http_request_txt.read().decode("UTF-8")
