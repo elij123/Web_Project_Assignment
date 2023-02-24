@@ -46,9 +46,10 @@ query_regex = re.compile(
     "([\w.\-~]|[%][0-9A-Fa-f][0-9A-Fa-f]|[!$&'()*+,;=]|[:]|[@]|[/]|[?])*", re.ASCII,
 )
 http_body = None
+location_header_path = None
 http_response_to_send = None
 http_request_method = None
-http_filepath = None
+http_fullpath = None
 http_query = None
 CRLF = "\r\n"
 
@@ -63,6 +64,10 @@ class VersionNotSupported(Exception):
 
 class MethodNotImplemented(Exception):
     print("The HTTP method in the request is not supported")
+
+
+class ContentLengthNotFound(Exception):
+    print("The Content-Length header for POST request was not found")
 
 
 # Logger
@@ -124,7 +129,8 @@ def http_method(input: str):
 # Parses URI from request line
 def request_target(input_str: str):
     global http_response_to_send
-    global http_filepath
+    global location_header_path
+    global http_fullpath
     global http_query
     try:
         if re.match("/", input_str) != None:
@@ -139,13 +145,15 @@ def request_target(input_str: str):
                         raise BadRequestException
                     if re.fullmatch(query_regex, query_str) == None:
                         raise BadRequestException
-                    http_filepath = "~/Web_Project_Assignment/Documents" + URI_path
+                    http_fullpath = "~/Web_Project_Assignment/Documents" + URI_path
+                    location_header_path = URI_path
                     http_query = query_str
                 else:
                     URI_path = input_str
                     if re.fullmatch(absolute_path_regex, URI_path) == None:
                         raise BadRequestException
-                    http_filepath = "~/Web_Project_Assignment/Documents" + URI_path
+                    http_fullpath = "~/Web_Project_Assignment/Documents" + URI_path
+                    location_header_path = URI_path
         else:
             raise BadRequestException
     except BadRequestException:
@@ -182,7 +190,7 @@ def http_version(input_str: str):
 
 # Parses Header field
 def header_block_http(header_block_str: str):
-    global http_filepath
+    global http_fullpath
     global http_response_to_send
     global http_body
     global http_request_method
@@ -206,8 +214,10 @@ def header_block_http(header_block_str: str):
                 temp = header_temp_str.split(":")
                 if host_str == None:
                     # Checks for existence of 'host' header field
-                    host_str = re.fullmatch("host", temp[0], re.IGNORECASE).string
-                http_headers_dict[temp[0]] = temp[1].strip()
+                    host_str = re.fullmatch(
+                        "host", temp[0], re.IGNORECASE
+                    ).string.lower()
+                http_headers_dict[temp[0].lower()] = temp[1].strip()
             # Checks for second CRLF to indicate end of header block
             if header_block_str[header_CRLF_index + 2 : header_CRLF_index + 4] == CRLF:
                 body_index = header_CRLF_index + 4
@@ -237,7 +247,7 @@ def header_block_http(header_block_str: str):
         else:
             raise BadRequestException
         http_response_to_send = http_request_method(
-            http_filepath, http_headers_dict, http_response_to_send, http_body
+            http_fullpath, http_headers_dict, http_response_to_send, http_body
         )
     except BadRequestException:
         http_response_to_send = http_response_400()
@@ -255,20 +265,23 @@ def host_port_verify(port_no):
 
 # Running PHP for POST request
 def php_exec_post(php_fname, length, body_php):
-    subprocess.run(["export", "GATEWAY_INTERFACE='CGI/1.1'"])
-    subprocess.run(["export", "SERVER_PROTOCOL='HTTP/1.1'"])
-    subprocess.run(["export", f"SCRIPT_FILENAME='{php_fname}'"])
-    subprocess.run(["export", f"REQUEST_METHOD='POST'"])
-    subprocess.run(["export", f"REMOTE_HOST='127.0.0.1'"])
-    subprocess.run(["export", f"CONTENT_LENGTH={length}"])
-    subprocess.run(["export", f"BODY='{body_php}'"])
-    subprocess.run(["export", f"CONTENT_TYPE='application/x-www-form-urlencoded'"])
-    out = subprocess.run(
-        ["exec", "echo", "'$BODY'", "|", "php-cgi"], capture_output=True, text=True
-    ).stdout.split(CRLF + CRLF)
-    content_type_out = out[0]
-    body_out = out[1]
-    return (content_type_out, body_out)
+    if length == len(body_php):
+        subprocess.run(["export", "GATEWAY_INTERFACE='CGI/1.1'"])
+        subprocess.run(["export", "SERVER_PROTOCOL='HTTP/1.1'"])
+        subprocess.run(["export", f"SCRIPT_FILENAME='{php_fname}'"])
+        subprocess.run(["export", f"REQUEST_METHOD='POST'"])
+        subprocess.run(["export", f"REMOTE_HOST='127.0.0.1'"])
+        subprocess.run(["export", f"CONTENT_LENGTH={length}"])
+        subprocess.run(["export", f"BODY='{body_php}'"])
+        subprocess.run(["export", f"CONTENT_TYPE='application/x-www-form-urlencoded'"])
+        out = subprocess.run(
+            ["exec", "echo", "'$BODY'", "|", "php-cgi"], capture_output=True, text=True
+        ).stdout.split(CRLF + CRLF)
+        content_type_out = out[0]
+        body_out = out[1]
+        return (content_type_out, body_out)
+    else:
+        raise BadRequestException
 
 
 # Running PHP for GET request
@@ -331,7 +344,7 @@ def PUT_request(filepath, headers_dict, response, body):
             requested_file = open(filepath, "wb")
             requested_file.write(bytes(body))
             requested_file.close()
-            response = http_response_201()
+            response = http_response_201(location_header_path, body)
         return response
     except PermissionError:
         requested_file.close()
@@ -347,8 +360,14 @@ def POST_request(filepath, headers_dict, response, body):
     if response != None:
         return response
     try:
-        php_output = php_exec_post(filepath, len(body), body)
-        response = http_response_200(php_output[1], len(php_output[1]))
+        if headers_dict["content-length"]:
+            php_output = php_exec_post(filepath, headers_dict["content-length"], body)
+            response = http_response_200(php_output[1], len(php_output[1]))
+        else:
+            raise ContentLengthNotFound
+    except ContentLengthNotFound:
+        response = http_response_411()
+        return response
     except FileNotFoundError:
         print("The file requested is not found")
         response = http_response_404()
@@ -356,6 +375,9 @@ def POST_request(filepath, headers_dict, response, body):
     except PermissionError:
         print("Not Allowed to access the file")
         response = http_response_403()
+        return response
+    except BadRequestException:
+        response = http_response_400()
         return response
     except:
         response = http_response_500()
@@ -433,7 +455,7 @@ def http_response_200(resp_body, body_len):
     return resp
 
 
-# HTTP responses for 204 No Content
+# HTTP response for 204 No Content for PUT
 def http_response_204():
     resp = f"HTTP/1.{server_minor_ver} 204 No Content\r\n"
     resp += "Python Custom Server/Ubuntu 22.04 LTS\r\n\r\n"
@@ -475,14 +497,14 @@ def http_response_500():
 
 
 # PUT success code
-def http_response_201():
+def http_response_201(put_location, put_body):
     resp = f"HTTP/1.{server_minor_ver} 201 Created\r\n"
     resp += "Python Custom Server/Ubuntu 22.04 LTS\r\n"
-    text = "<html><body><h1>File Created</h1></body></html>"
+    resp += f"Location: {put_location}\r\n"
     resp += "Accept-Ranges: bytes\r\n"
-    resp += f"Content-Length: {text}\r\n"
+    resp += f"Content-Length: {len(put_body)}\r\n"
     resp += "Content-Type: text/html; charset=UTF-8\r\n\r\n"
-    resp += text
+    resp += put_body
     return resp
 
 
@@ -512,13 +534,9 @@ def http_response_404():
 
 # POST - No Content Length
 def http_response_411():
-    resp = f"HTTP/1.{server_minor_ver} 411 No Content Length\r\n"
+    resp = f"HTTP/1.{server_minor_ver} 411 Length Required\r\n"
     resp += "Python Custom Server/Ubuntu 22.04 LTS\r\n"
-    text = "<html><body><h1>411 No Content Length Provided</h1></body></html>"
-    resp += f"Content-Length: {len(text)}\r\n"
-    resp += "Connection: close\r\n"
-    resp += "Content-Type: text/html; charset=UTF-8\r\n\r\n"
-    resp += text
+    resp += "Connection: close\r\n\r\n"
     return resp
 
 
