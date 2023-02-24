@@ -49,6 +49,7 @@ http_body = None
 http_response_to_send = None
 http_request_method = None
 http_filepath = None
+http_query = None
 CRLF = "\r\n"
 
 # Defining exceptions for HTTP errors
@@ -124,6 +125,7 @@ def http_method(input: str):
 def request_target(input_str: str):
     global http_response_to_send
     global http_filepath
+    global http_query
     try:
         if re.match("/", input_str) != None:
             if input_str == "/":
@@ -137,11 +139,13 @@ def request_target(input_str: str):
                         raise BadRequestException
                     if re.fullmatch(query_regex, query_str) == None:
                         raise BadRequestException
+                    http_filepath = "~/Web_Project_Assignment/Documents" + URI_path
+                    http_query = query_str
                 else:
                     URI_path = input_str
                     if re.fullmatch(absolute_path_regex, URI_path) == None:
                         raise BadRequestException
-            http_filepath = input_str
+                    http_filepath = "~/Web_Project_Assignment/Documents" + URI_path
         else:
             raise BadRequestException
     except BadRequestException:
@@ -249,8 +253,34 @@ def host_port_verify(port_no):
     return re.fullmatch(port, port_no)
 
 
+def php_exec_post(php_fname, length, body_php):
+    subprocess.run(["export", "GATEWAY_INTERFACE='CGI/1.1'"])
+    subprocess.run(["export", "SERVER_PROTOCOL='HTTP/1.1'"])
+    subprocess.run(["export", f"SCRIPT_FILENAME='{php_fname}'"])
+    subprocess.run(["export", f"REQUEST_METHOD='POST'"])
+    subprocess.run(["export", f"REMOTE_HOST='127.0.0.1'"])
+    subprocess.run(["export", f"CONTENT_LENGTH={length}"])
+    subprocess.run(["export", f"BODY='{body_php}'"])
+    subprocess.run(["export", f"CONTENT_TYPE='application/x-www-form-urlencoded'"])
+    out = subprocess.run(
+        ["exec", "echo", "'$BODY'", "|", "php-cgi"], capture_output=True, text=True
+    ).stdout.split(CRLF)
+    content_type_out = out[0]
+    body_out = out[1]
+    return (content_type_out, body_out)
+
+
+def php_exec_get(php_fname, php_query):
+    cmd_str = ["php-cgi", f"{php_fname}"] + php_query.split("&")
+    out = subprocess.run(cmd_str, capture_output=True, text=True).stdout.split(CRLF)
+    content_type_out = out[0]
+    body_out = out[1]
+    return (content_type_out, body_out)
+
+
 # Request Methods
 def GET_request(filepath, headers_dict, response):
+    global http_query
     if response != None:
         return response
     try:
@@ -262,9 +292,8 @@ def GET_request(filepath, headers_dict, response):
             resp_body = requested_file.read().decode("UTF-8").rstrip()
             response = http_response_200(resp_body, len(resp_body))
         else:
-            # php_output = subprocess.run(["php-cgi",], capture_output=True, text=True)
-            # print(result.stdout)
-            pass
+            php_output = php_exec_get(filepath, http_query)
+            response = http_response_200(php_output[1], len(php_output[1]))
     except FileNotFoundError:
         requested_file.close()
         print("The file requested is not found")
@@ -314,9 +343,8 @@ def POST_request(filepath, headers_dict, response, body):
     if response != None:
         return response
     try:
-        # php_output = subprocess.run(["php-cgi",], capture_output=True, text=True)
-        # print(result.stdout)
-        pass
+        php_output = php_exec_post(filepath, len(body), body)
+        response = http_response_200(php_output[1], len(php_output[1]))
     except FileNotFoundError:
         print("The file requested is not found")
         response = http_response_404()
@@ -356,6 +384,7 @@ def DELETE_request(filepath, headers_dict, response, body):
 
 
 def HEAD_request(filepath, headers_dict, response, body):
+    global http_query
     if response != None:
         return response
     try:
@@ -367,9 +396,8 @@ def HEAD_request(filepath, headers_dict, response, body):
             resp_body = requested_file.read().decode("UTF-8").rstrip()
             response = http_response_200_head(len(resp_body))
         else:
-            # php_output = subprocess.run(["php-cgi",], capture_output=True, text=True)
-            # print(result.stdout)
-            pass
+            php_output = php_exec_get(filepath, http_query)
+            response = http_response_200_head(len(php_output[1]))
     except FileNotFoundError:
         requested_file.close()
         print("The file requested is not found")
@@ -396,7 +424,7 @@ def http_response_200(resp_body, body_len):
     resp += "Python Custom Server/Ubuntu 22.04 LTS\r\n"
     resp += "Accept-Ranges: bytes\r\n"
     resp += f"Content-Length: {body_len}\r\n"
-    resp += "Content-Type: text/html\r\n\r\n"
+    resp += "Content-Type: text/html; charset=UTF-8\r\n\r\n"
     resp += resp_body
     return resp
 
@@ -415,7 +443,7 @@ def http_response_400():
     text = "<html><body><h1>400: Bad Request</h1></body></html>"
     resp += f"Content-Length: {len(text)}\r\n"
     resp += "Connection: close\r\n"
-    resp += "Content-Type: text/html; charset=iso-8859-1\r\n\r\n"
+    resp += "Content-Type: text/html; charset=UTF-8\r\n\r\n"
     resp += text
     return resp
 
@@ -426,7 +454,7 @@ def http_response_200_head(body_len):
     resp += "Python Custom Server/Ubuntu 22.04 LTS\r\n"
     resp += "Accept-Ranges: bytes\r\n"
     resp += f"Content-Length: {body_len}\r\n"
-    resp += "Content-Type: text/html\r\n\r\n"
+    resp += "Content-Type: text/html; charset=UTF-8\r\n\r\n"
     return resp
 
 
@@ -437,7 +465,7 @@ def http_response_500():
     text = "<html><body><h1>500: Internal Server Error</h1></body></html>"
     resp += f"Content-Length: {len(text)}\r\n"
     resp += "Connection: close\r\n"
-    resp += "Content-Type: text/html; charset=iso-8859-1\r\n\r\n"
+    resp += "Content-Type: text/html; charset=UTF-8\r\n\r\n"
     resp += text
     return resp
 
@@ -449,7 +477,7 @@ def http_response_201():
     text = "<html><body><h1>File Created</h1></body></html>"
     resp += "Accept-Ranges: bytes\r\n"
     resp += f"Content-Length: {text}\r\n"
-    resp += "Content-Type: text/html\r\n\r\n"
+    resp += "Content-Type: text/html; charset=UTF-8\r\n\r\n"
     resp += text
     return resp
 
@@ -461,7 +489,7 @@ def http_response_403():
     text = "<html><body><h1>403 Access Denied</h1></body></html>"
     resp += f"Content-Length: {len(text)}\r\n"
     resp += "Connection: close\r\n"
-    resp += "Content-Type: text/html; charset=iso-8859-1\r\n\r\n"
+    resp += "Content-Type: text/html; charset=UTF-8\r\n\r\n"
     resp += text
     return resp
 
@@ -473,7 +501,7 @@ def http_response_404():
     text = "<html><body><h1>404 Not Found</h1></body></html>"
     resp += f"Content-Length: {len(text)}\r\n"
     resp += "Connection: close\r\n"
-    resp += "Content-Type: text/html; charset=iso-8859-1\r\n\r\n"
+    resp += "Content-Type: text/html; charset=UTF-8\r\n\r\n"
     resp += text
     return resp
 
@@ -485,7 +513,7 @@ def http_response_411():
     text = "<html><body><h1>411 No Content Length Provided</h1></body></html>"
     resp += f"Content-Length: {len(text)}\r\n"
     resp += "Connection: close\r\n"
-    resp += "Content-Type: text/html; charset=iso-8859-1\r\n\r\n"
+    resp += "Content-Type: text/html; charset=UTF-8\r\n\r\n"
     resp += text
     return resp
 
@@ -497,7 +525,7 @@ def http_response_501():
     text = "<html><body><h1>501 HTTP Method Not Supported</h1></body></html>"
     resp += f"Content-Length: {len(text)}\r\n"
     resp += "Connection: close\r\n"
-    resp += "Content-Type: text/html; charset=iso-8859-1\r\n\r\n"
+    resp += "Content-Type: text/html; charset=UTF-8\r\n\r\n"
     resp += text
     return resp
 
@@ -509,7 +537,7 @@ def http_response_505():
     text = "<html><body><h1>505 Version Not Supported</h1></body></html>"
     resp += f"Content-Length: {len(text)}\r\n"
     resp += "Connection: close\r\n"
-    resp += "Content-Type: text/html; charset=iso-8859-1\r\n\r\n"
+    resp += "Content-Type: text/html; charset=UTF-8\r\n\r\n"
     resp += text
     return resp
 
