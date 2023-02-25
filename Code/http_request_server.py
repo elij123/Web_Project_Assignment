@@ -404,7 +404,7 @@ def DELETE_request(filepath, headers_dict, response, body):
         response = http_response_500()
         return response
     else:
-        text = "File Deleted"
+        text = "<html><body><h1>File Deleted</h1></body></html>"
         response = http_response_200(text, len(text))
         return response
 
