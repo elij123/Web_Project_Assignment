@@ -55,32 +55,38 @@ CRLF = "\r\n"
 
 # Defining exceptions for HTTP errors
 class BadRequestException(Exception):
-    print("the HTTP request is ill-formed")
+    pass
+    
 
 
 class VersionNotSupported(Exception):
-    print("The HTTP version of the request is not supported")
+    pass
+    
+    
+    
+class ContentLengthNotFound(Exception):
+    pass
+    
 
 
 class MethodNotImplemented(Exception):
-    print("The HTTP method in the request is not supported")
+    pass
+    
 
-
-class ContentLengthNotFound(Exception):
-    print("The Content-Length header for POST request was not found")
 
 
 # Logger
 def http_request_logger(request_line):
     with open("http_log.txt", "wb") as http_log:
         datetime_NY = datetime.now(tz_NY)
-        datetime_NY_str = datetime_NY.strftime("%d %b, %Y", "%H:%M:%S")
-        http_log.write(bytes(datetime_NY_str + "HTTP Request " + request_line))
+        datetime_NY_str = datetime_NY.strftime("%d %b, %Y, %H:%M:%S")
+        http_log.write(bytes(datetime_NY_str + " HTTP Request " + request_line, "UTF-8"))
 
 
 # Parses HTTP request
-def http_request_message(input_http_str: str):
+def http_request_message(input_http_str):
     global http_response_to_send
+    print(input_http_str)
     first_CRLF = input_http_str.find(CRLF)
     if first_CRLF != -1:
         request_start_line_http(input_http_str[:first_CRLF])
@@ -89,7 +95,7 @@ def http_request_message(input_http_str: str):
 
 
 # Parses HTTP Request Line
-def request_start_line_http(input_str: str):
+def request_start_line_http(input_str):
     if input_str.find(" ") != -1:
         str_segments = input_str.split(" ")
         http_method(str_segments[0])
@@ -119,15 +125,18 @@ def http_method(input: str):
         else:
             raise BadRequestException
     except BadRequestException:
+        print("the HTTP request is ill-formed")
         http_response_to_send = http_response_400()
     except MethodNotImplemented:
+        print("The HTTP method in the request is not supported")
         http_response_to_send = http_response_501()
     except:
+        breakpoint()
         http_response_to_send = http_response_500()
 
 
 # Parses URI from request line
-def request_target(input_str: str):
+def request_target(input_str):
     global http_response_to_send
     global location_header_path
     global http_fullpath
@@ -145,25 +154,27 @@ def request_target(input_str: str):
                         raise BadRequestException
                     if re.fullmatch(query_regex, query_str) == None:
                         raise BadRequestException
-                    http_fullpath = "~/Web_Project_Assignment/Documents" + URI_path
+                    http_fullpath = "/media/sf_Ubuntu_Web_Assignment/Documents" + URI_path
                     location_header_path = URI_path
                     http_query = query_str
                 else:
                     URI_path = input_str
                     if re.fullmatch(absolute_path_regex, URI_path) == None:
                         raise BadRequestException
-                    http_fullpath = "~/Web_Project_Assignment/Documents" + URI_path
+                    http_fullpath = "/media/sf_Ubuntu_Web_Assignment/Documents" + URI_path
                     location_header_path = URI_path
         else:
             raise BadRequestException
     except BadRequestException:
+        print("the HTTP request is ill-formed")
         http_response_to_send = http_response_400()
     except:
+        breakpoint()
         http_response_to_send = http_response_500()
 
 
 # Parses http version
-def http_version(input_str: str):
+def http_version(input_str):
     global http_response_to_send
     global server_minor_ver
     try:
@@ -181,15 +192,19 @@ def http_version(input_str: str):
         else:
             raise BadRequestException
     except BadRequestException:
+        print("the HTTP request is ill-formed")
         http_response_to_send = http_response_400()
     except VersionNotSupported:
+        print("The HTTP version of the request is not supported")
         http_response_to_send = http_response_505()
-    except:
+    except Exception as e:
+        print(e)
+        breakpoint()
         http_response_to_send = http_response_500()
 
 
 # Parses Header field
-def header_block_http(header_block_str: str):
+def header_block_http(header_block_str):
     global http_fullpath
     global http_response_to_send
     global http_body
@@ -201,14 +216,12 @@ def header_block_http(header_block_str: str):
     try:
         while header_CRLF_index != -1:
             header_temp_str = header_block_str[: header_CRLF_index + 2]
-            if (
-                re.fullmatch(
+            header_re_test = re.fullmatch(
                     "[!#$%&’*+\-.^‘|~\w]+:( |\t)*([\S ](( |\t)+[\S ])?)*( |\t)*" + CRLF,
                     header_temp_str,
                     re.ASCII,
                 )
-                == None
-            ):
+            if (header_re_test == None):
                 raise BadRequestException
             else:
                 temp = header_temp_str.split(":")
@@ -220,10 +233,12 @@ def header_block_http(header_block_str: str):
                 http_headers_dict[temp[0].lower()] = temp[1].strip()
             # Checks for second CRLF to indicate end of header block
             if header_block_str[header_CRLF_index + 2 : header_CRLF_index + 4] == CRLF:
-                body_index = header_CRLF_index + 4
-                http_body = header_block_str[body_index:]
-                http_body = http_body.rstrip()
-                break
+                if "content-length" in http_headers_dict:
+                    body_index = header_CRLF_index + 4
+                    http_body_length = http_headers_dict["content-length"]
+                    http_body = header_block_str[body_index:body_index+http_body_length]
+                    http_body = http_body.rstrip()
+                    break
             else:
                 # Shifting the overall header string forward to position right after
                 # the current CRLF
@@ -250,8 +265,10 @@ def header_block_http(header_block_str: str):
             http_fullpath, http_headers_dict, http_response_to_send, http_body
         )
     except BadRequestException:
+        print("the HTTP request is ill-formed")
         http_response_to_send = http_response_400()
     except:
+        breakpoint()
         http_response_to_send = http_response_500()
 
 
@@ -323,6 +340,7 @@ def GET_request(filepath, headers_dict, response):
         return response
     except:
         requested_file.close()
+        breakpoint()
         response = http_response_500()
         return response
     else:
@@ -337,12 +355,12 @@ def PUT_request(filepath, headers_dict, response, body):
     try:
         if os.access(filepath, os.F_OK):
             requested_file = open(filepath, "wb")
-            requested_file.write(bytes(body))
+            requested_file.write(bytes(body, "UTF-8"))
             requested_file.close()
             response = http_response_204()
         else:
             requested_file = open(filepath, "wb")
-            requested_file.write(bytes(body))
+            requested_file.write(bytes(body, "UTF-8"))
             requested_file.close()
             response = http_response_201(location_header_path, body)
         return response
@@ -353,6 +371,7 @@ def PUT_request(filepath, headers_dict, response, body):
         return response
     except:
         requested_file.close()
+        breakpoint()
         response = http_response_500()
 
 
@@ -366,6 +385,7 @@ def POST_request(filepath, headers_dict, response, body):
         else:
             raise ContentLengthNotFound
     except ContentLengthNotFound:
+        print("The Content-Length header for POST request was not found")
         response = http_response_411()
         return response
     except FileNotFoundError:
@@ -377,9 +397,11 @@ def POST_request(filepath, headers_dict, response, body):
         response = http_response_403()
         return response
     except BadRequestException:
+        print("the HTTP request is ill-formed")
         response = http_response_400()
         return response
     except:
+        breakpoint()
         response = http_response_500()
         return response
     else:
@@ -401,6 +423,7 @@ def DELETE_request(filepath, headers_dict, response, body):
         response = http_response_403()
         return response
     except:
+        breakpoint()
         response = http_response_500()
         return response
     else:
@@ -436,6 +459,7 @@ def HEAD_request(filepath, headers_dict, response, body):
         return response
     except:
         requested_file.close()
+        breakpoint()
         response = http_response_500()
         return response
     else:
@@ -572,7 +596,7 @@ def https_conn_handler(conn, x509, privatekey):
     context.load_cert_chain(certfile=x509, keyfile=privatekey, password=None)
     tls_conn = context.wrap_socket(conn, server_side=True)
     recv_req = tls_conn.recv(2048)
-    while recv_req:
+    while len(recv_req):
         resp += recv_req.decode("UTF-8")
         recv_req = tls_conn.recv(2048)
     resp = http_request_message(recv_req)
@@ -581,41 +605,44 @@ def https_conn_handler(conn, x509, privatekey):
 
 
 def http_conn_handler(conn):
-    recv_req = conn.recv(2048)
-    while recv_req:
-        resp += recv_req.decode("UTF-8")
-        recv_req = conn.recv(2048)
-    resp = http_request_message(recv_req)
+    resp = ""
+    recv_req = ""
+    temp = conn.recv(2048)
+    resp = http_request_message(temp.decode("UTF-8"))
+    print(resp)
     conn.send(resp.encode("UTF-8"))
     conn.close()
 
 
 def main(
-    ip_addr_listen: str,
-    port_listen: int,
-    x509_file_path: str = None,
-    private_key_path: str = None,
+    ip_addr_listen:str,
+    port_listen:int,
+    x509_file_path = None,
+    private_key_path = None,
 ):
-
-    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server.bind((ip_addr_listen, port_listen))
-    server.listen(5)
-    if x509_file_path:
-        if private_key_path:
+    try:
+        server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        server.bind((ip_addr_listen, port_listen))
+        server.listen(5)
+        if x509_file_path:
+            if private_key_path:
+                while True:
+                    conn, addr = server.accept()
+                    t = threading.Thread(
+                        target=https_conn_handler,
+                        args=(conn, x509_file_path, private_key_path,),
+                    )
+                    t.start()
+            else:
+                sys.exit(15)  # Private key not provided
+        else:
             while True:
                 conn, addr = server.accept()
-                t = threading.Thread(
-                    target=https_conn_handler,
-                    args=(conn, x509_file_path, private_key_path,),
-                )
+                t = threading.Thread(target=http_conn_handler, args=(conn,))
                 t.start()
-        else:
-            sys.exit(15)  # Private key not provided
-    else:
-        while True:
-            conn, addr = server.accept()
-            t = threading.Thread(target=http_conn_handler, args=(conn,))
-            t.start()
+    except Exception as e:
+        print(e)
+        server.close()
 
     # with open(file_name, "rb") as http_request_txt:
     #     request_text = http_request_txt.read().decode("UTF-8")
