@@ -538,6 +538,7 @@ def http_response_505():
 
 def https_conn_handler(conn, x509, privatekey):
     http_obj = http_session()
+    resp = ""
     with warnings.catch_warnings():
         warnings.simplefilter(action="ignore", category=DeprecationWarning)
         context = ssl.SSLContext(ssl.PROTOCOL_TLSv1_2)
@@ -545,7 +546,8 @@ def https_conn_handler(conn, x509, privatekey):
     context.load_cert_chain(certfile=x509, keyfile=privatekey, password=None)
     tls_conn = context.wrap_socket(conn, server_side=True)
     recv_req = tls_conn.recv(2048)
-    resp = http_obj.http_request_message(recv_req.decode("UTF-8"))
+    if recv_req != None:
+        resp = http_obj.http_request_message(recv_req.decode("UTF-8"))
     tls_conn.send(resp.encode("UTF-8"))
     del http_obj
     tls_conn.close()
