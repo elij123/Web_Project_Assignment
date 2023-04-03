@@ -64,7 +64,6 @@ class ContentLengthNotFound(Exception):
 class MethodNotImplemented(Exception):
     pass
 
-
 class http_session:
     def __init__(self,):
         self.http_body = None
@@ -75,14 +74,12 @@ class http_session:
         self.http_query = None
 
         # Logger
-
     def http_request_logger(self, request_line):
-        with open("http_log.txt", "wba") as http_log:
+        with open("http_log.txt", "a") as http_log:
             datetime_NY = datetime.now(tz_NY)
             datetime_NY_str = datetime_NY.strftime("%d %b, %Y, %H:%M:%S")
-            http_log.write(
-                bytes(datetime_NY_str + " HTTP Request " + request_line, "UTF-8")
-            )
+            http_log.write(datetime_NY_str + " HTTP Request " + request_line + CRLF)
+
 
     # Parses HTTP request
     def http_request_message(self, input_http_str):
@@ -107,8 +104,9 @@ class http_session:
         finally:
             return self.http_response_to_send
 
+
     # Parses HTTP Request Line
-    def request_start_line_http(self, input_str):
+    def request_start_line_http(self,input_str):
         if input_str.find(" ") != -1:
             str_segments = input_str.split(" ")
             self.http_method(str_segments[0])
@@ -117,6 +115,8 @@ class http_session:
             self.http_request_logger(input_str)
         else:
             raise BadRequestException
+        
+
 
     # HTTP responses for different HTTP request
     def http_method(self, input: str):
@@ -135,15 +135,17 @@ class http_session:
                 raise MethodNotImplemented
         else:
             raise BadRequestException
+        
 
-    # Parses URI from request line
-    def request_target(self, input_str):
+
+# Parses URI from request line
+    def request_target(self,input_str):
         if re.match("/", input_str) != None:
             if input_str == "/":
                 URI_path = "/index.html"
                 self.http_fullpath = (
-                    "/media/sf_Ubuntu_Web_Assignment/Documents" + URI_path
-                )
+                        "/media/sf_Ubuntu_Web_Assignment/Documents" + URI_path
+                    )
                 self.location_header_path = URI_path
             else:
                 if input_str.find("?") != -1:
@@ -170,8 +172,9 @@ class http_session:
         else:
             raise BadRequestException
 
+
     # Parses http version
-    def http_version(self, input_str):
+    def http_version(self,input_str):
         global server_minor_ver
         if re.fullmatch("HTTP/[\d].[\d]", input_str, re.ASCII) != None:
             segments = input_str.split("/")
@@ -186,6 +189,7 @@ class http_session:
             server_minor_ver = version_no_seg[1]
         else:
             raise BadRequestException
+
 
     # Parses Header field
     def header_block_http(self, header_block_str):
@@ -244,31 +248,15 @@ class http_session:
         else:
             raise BadRequestException
         self.http_response_to_send = self.http_request_method(
-            self.http_fullpath,
-            http_headers_dict,
-            self.http_response_to_send,
-            self.http_body,
+            self.http_fullpath, http_headers_dict, self.http_response_to_send, self.http_body
         )
 
     # Running PHP for POST request
     def php_exec_post(self, php_fname, length, body_php):
         if length == len(body_php):
-            php_post_env = {
-                "GATEWAY_INTERFACE": "CGI/1.1",
-                "SERVER_PROTOCOL": "HTTP/1.1",
-                "SCRIPT_FILENAME": f"{php_fname}",
-                "REQUEST_METHOD": "POST",
-                "REMOTE_HOST": "127.0.0.1",
-                "CONTENT_LENGTH": f"{length}",
-                "BODY": f"{body_php}",
-                "CONTENT_TYPE": "application/x-www-form-urlencoded",
-            }
+            php_post_env = {"GATEWAY_INTERFACE":'CGI/1.1', "SERVER_PROTOCOL":'HTTP/1.1', "SCRIPT_FILENAME":f'{php_fname}', "REQUEST_METHOD":'POST', "REMOTE_HOST":'127.0.0.1', "CONTENT_LENGTH":f'{length}', "BODY":f'{body_php}', "CONTENT_TYPE":'application/x-www-form-urlencoded'}
             out = subprocess.run(
-                "exec echo $BODY | php-cgi",
-                capture_output=True,
-                text=True,
-                shell=True,
-                env=php_post_env,
+                "exec echo $BODY | php-cgi", capture_output=True, text=True, shell=True, env=php_post_env
             ).stdout.split("\n\n")
             content_type_out = out[0]
             body_out = out[1]
@@ -276,18 +264,21 @@ class http_session:
         else:
             raise BadRequestException
 
+
     # Running PHP for GET request
     def php_exec_get(self, php_fname, php_query):
-        cmd_str = f"php-cgi {php_fname}" + " " + " ".join(php_query.split("&"))
-        out = subprocess.run(
-            cmd_str, capture_output=True, text=True, shell=True
-        ).stdout.split("\n\n")
+        if php_query is None:
+            cmd_str = f"php-cgi {php_fname}"
+        else:
+            cmd_str = f"php-cgi {php_fname}" + " " + " ".join(php_query.split("&"))
+        out = subprocess.run(cmd_str, capture_output=True, text=True, shell=True).stdout.split("\n\n")
         content_type_out = out[0]
         body_out = out[1]
         return (content_type_out, body_out)
 
+
     # Request Methods
-    def GET_request(self, filepath, headers_dict, response, body):
+    def GET_request(self,filepath, headers_dict, response, body):
         if response != None:
             return response
         try:
@@ -318,6 +309,7 @@ class http_session:
             requested_file.close()
             return response
 
+
     def PUT_request(self, filepath, headers_dict, response, body):
         if response != None:
             return response
@@ -342,15 +334,14 @@ class http_session:
             response = http_response_500()
             return response
 
+
     def POST_request(self, filepath, headers_dict, response, body):
         if response != None:
             return response
         try:
             if headers_dict["content-length"]:
                 requested_file = open(filepath, "r")
-                php_output = self.php_exec_post(
-                    filepath, int(headers_dict["content-length"]), body
-                )
+                php_output = self.php_exec_post(filepath, int(headers_dict["content-length"]), body)
                 response = http_response_200(php_output[1], len(php_output[1]))
             else:
                 raise ContentLengthNotFound
@@ -370,6 +361,7 @@ class http_session:
             requested_file.close()
             return response
 
+
     def DELETE_request(self, filepath, headers_dict, response, body):
         if response != None:
             return response
@@ -388,7 +380,8 @@ class http_session:
             response = http_response_200(text, len(text))
             return response
 
-    def HEAD_request(self, filepath, headers_dict, response, body):
+
+    def HEAD_request(self,filepath, headers_dict, response, body):
         if response != None:
             return response
         try:
@@ -416,10 +409,11 @@ class http_session:
             return response
 
 
+
 # HTTP responses for 200(OK)
 def http_response_200(resp_body, body_len):
     resp = f"HTTP/1.{server_minor_ver} 200 OK\r\n"
-    resp += "Python Custom Server/Ubuntu 22.04 LTS\r\n"
+    resp += "User-Agent: Python/Ubuntu 22.04 LTS\r\n"
     resp += "Accept-Ranges: bytes\r\n"
     resp += f"Content-Length: {body_len}\r\n"
     resp += "Content-Type: text/html; charset=UTF-8\r\n\r\n"
@@ -430,14 +424,14 @@ def http_response_200(resp_body, body_len):
 # HTTP response for 204 No Content for PUT
 def http_response_204():
     resp = f"HTTP/1.{server_minor_ver} 204 No Content\r\n"
-    resp += "Python Custom Server/Ubuntu 22.04 LTS\r\n\r\n"
+    resp += "User-Agent: Python/Ubuntu 22.04 LTS\r\n\r\n"
     return resp
 
 
 # Bad Request - error
 def http_response_400():
     resp = f"HTTP/1.{server_minor_ver} 400 Bad Request\r\n"
-    resp += "Python Custom Server/Ubuntu 22.04 LTS\r\n"
+    resp += "User-Agent: Python/Ubuntu 22.04 LTS\r\n"
     text = "<html><body><h1>400: Bad Request</h1></body></html>"
     resp += f"Content-Length: {len(text)}\r\n"
     resp += "Connection: close\r\n"
@@ -449,7 +443,7 @@ def http_response_400():
 # HTTP HEAD Response
 def http_response_200_head(body_len):
     resp = f"HTTP/1.{server_minor_ver} 200 OK\r\n"
-    resp += "Python Custom Server/Ubuntu 22.04 LTS\r\n"
+    resp += "User-Agent: Python/Ubuntu 22.04 LTS\r\n"
     resp += "Accept-Ranges: bytes\r\n"
     resp += f"Content-Length: {body_len}\r\n"
     resp += "Content-Type: text/html; charset=UTF-8\r\n\r\n"
@@ -459,7 +453,7 @@ def http_response_200_head(body_len):
 # Internal Server Error - error
 def http_response_500():
     resp = f"HTTP/1.{server_minor_ver} 500 Internal Server Error\r\n"
-    resp += "Python Custom Server/Ubuntu 22.04 LTS\r\n"
+    resp += "User-Agent: Python/Ubuntu 22.04 LTS\r\n"
     text = "<html><body><h1>500: Internal Server Error</h1></body></html>"
     resp += f"Content-Length: {len(text)}\r\n"
     resp += "Connection: close\r\n"
@@ -471,7 +465,7 @@ def http_response_500():
 # PUT success code
 def http_response_201(put_location, put_body):
     resp = f"HTTP/1.{server_minor_ver} 201 Created\r\n"
-    resp += "Python Custom Server/Ubuntu 22.04 LTS\r\n"
+    resp += "User-Agent: Python/Ubuntu 22.04 LTS\r\n"
     resp += f"Location: {put_location}\r\n"
     resp += "Accept-Ranges: bytes\r\n"
     resp += f"Content-Length: {len(put_body)}\r\n"
@@ -483,7 +477,7 @@ def http_response_201(put_location, put_body):
 # No Permission to access file - error
 def http_response_403():
     resp = f"HTTP/1.{server_minor_ver} 403 Access Denied\r\n"
-    resp += "Python Custom Server/Ubuntu 22.04 LTS\r\n"
+    resp += "User-Agent: Python/Ubuntu 22.04 LTS\r\n"
     text = "<html><body><h1>403 Access Denied</h1></body></html>"
     resp += f"Content-Length: {len(text)}\r\n"
     resp += "Connection: close\r\n"
@@ -495,7 +489,7 @@ def http_response_403():
 # Not Found - error
 def http_response_404():
     resp = f"HTTP/1.{server_minor_ver} 404 Not Found\r\n"
-    resp += "Python Custom Server/Ubuntu 22.04 LTS\r\n"
+    resp += "User-Agent: Python/Ubuntu 22.04 LTS\r\n"
     text = "<html><body><h1>404 Not Found</h1></body></html>"
     resp += f"Content-Length: {len(text)}\r\n"
     resp += "Connection: close\r\n"
@@ -507,7 +501,7 @@ def http_response_404():
 # POST - No Content Length - Error
 def http_response_411():
     resp = f"HTTP/1.{server_minor_ver} 411 Length Required\r\n"
-    resp += "Python Custom Server/Ubuntu 22.04 LTS\r\n"
+    resp += "User-Agent: Python/Ubuntu 22.04 LTS\r\n"
     resp += "Connection: close\r\n\r\n"
     return resp
 
@@ -515,7 +509,7 @@ def http_response_411():
 # HTTP Method Not Implemented - Error
 def http_response_501():
     resp = f"HTTP/1.{server_minor_ver} 501 HTTP Method Not Supported\r\n"
-    resp += "Python Custom Server/Ubuntu 22.04 LTS\r\n"
+    resp += "User-Agent: Python/Ubuntu 22.04 LTS\r\n"
     text = "<html><body><h1>501 HTTP Method Not Supported</h1></body></html>"
     resp += f"Content-Length: {len(text)}\r\n"
     resp += "Connection: close\r\n"
@@ -527,7 +521,7 @@ def http_response_501():
 # Version not supported - Error
 def http_response_505():
     resp = f"HTTP/1.{server_minor_ver} 505 Version Not Supported\r\n"
-    resp += "Python Custom Server/Ubuntu 22.04 LTS\r\n"
+    resp += "User-Agent: Python/Ubuntu 22.04 LTS\r\n"
     text = "<html><body><h1>505 Version Not Supported</h1></body></html>"
     resp += f"Content-Length: {len(text)}\r\n"
     resp += "Connection: close\r\n"
@@ -538,7 +532,6 @@ def http_response_505():
 
 def https_conn_handler(conn, x509, privatekey):
     http_obj = http_session()
-    resp = ""
     with warnings.catch_warnings():
         warnings.simplefilter(action="ignore", category=DeprecationWarning)
         context = ssl.SSLContext(ssl.PROTOCOL_TLSv1_2)
@@ -548,7 +541,8 @@ def https_conn_handler(conn, x509, privatekey):
     recv_req = tls_conn.recv(2048)
     if recv_req != None:
         resp = http_obj.http_request_message(recv_req.decode("UTF-8"))
-    tls_conn.send(resp.encode("UTF-8"))
+        if resp != None:
+            tls_conn.send(resp.encode("UTF-8"))
     del http_obj
     tls_conn.close()
 
@@ -559,8 +553,8 @@ def http_conn_handler(conn):
     recv_req = conn.recv(2048)
     if recv_req != None:
         resp = http_obj.http_request_message(recv_req.decode("UTF-8"))
-    print(resp)
-    conn.send(resp.encode("UTF-8"))
+        if resp != None:
+            conn.send(resp.encode("UTF-8"))
     del http_obj
     conn.close()
 
