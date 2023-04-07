@@ -1,0 +1,14 @@
+---
+# tasks file for web_server_python_https
+- name: Install typer using pip
+  ansible.builtin.pip:
+    name: "typer[all]"
+
+- name: Install pytz using pip
+  ansible.builtin.pip:
+    name: pytz
+
+- name: Run the server using HTTPS on port 8080
+  ansible.builtin.script:
+    cmd: python3 python_https_server.py 127.0.0.1 8080 project.crt project.key
+
