@@ -1,2 +1,0 @@
-Usage: python3 -m http_request_server <IP address of server> 
-<Port number for HTTP> <File Path for x509 cert> <File Path for Private Key>
