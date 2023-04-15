@@ -1,0 +1,19 @@
+version: '3'
+services:
+  web_app:
+    networks:
+      web_app_project_net:
+        ipv4_address: 10.0.0.2
+  waf:
+    networks:
+      web_app_project_net:
+        ipv4_address: 10.0.0.3
+  loadbalancer:
+    networks:
+      web_app_project_net:
+        ipv4_address: 10.0.0.4
+networks:
+  web_app_project_net:
+    ipam:
+      config:
+        - subnet: 10.0.0.0/24
