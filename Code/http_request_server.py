@@ -140,12 +140,11 @@ class http_session:
 
 # Parses URI from request line
     def request_target(self,input_str):
+        current_dir = os.getcwd()
         if re.match("/", input_str) != None:
             if input_str == "/":
                 URI_path = "/index.html"
-                self.http_fullpath = (
-                        "/media/sf_Ubuntu_Web_Assignment/Documents" + URI_path
-                    )
+                self.http_fullpath = ( current_dir + URI_path )
                 self.location_header_path = URI_path
             else:
                 if input_str.find("?") != -1:
@@ -156,18 +155,14 @@ class http_session:
                         raise BadRequestException
                     if re.fullmatch(query_regex, query_str) == None:
                         raise BadRequestException
-                    self.http_fullpath = (
-                        "/media/sf_Ubuntu_Web_Assignment/Documents" + URI_path
-                    )
+                    self.http_fullpath = ( current_dir + URI_path )
                     self.location_header_path = URI_path
                     self.http_query = query_str
                 else:
                     URI_path = input_str
                     if re.fullmatch(absolute_path_regex, URI_path) == None:
                         raise BadRequestException
-                    self.http_fullpath = (
-                        "/media/sf_Ubuntu_Web_Assignment/Documents" + URI_path
-                    )
+                    self.http_fullpath = ( current_dir + URI_path )
                     self.location_header_path = URI_path
         else:
             raise BadRequestException
