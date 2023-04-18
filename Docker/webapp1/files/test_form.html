@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Prom Registration Form</title>
+</head>
+
+<body>
+    <h1>Prom Registration Form</h1>
+    <h2>Please enter your details below to register for the Prom</h2>
+    <br>
+    <form action="registration.php" method="POST">
+        <div>
+            Name: <input type="text" name="name">
+        </div>
+        <div>
+            Email: <input type="text" name="email_id">
+        </div>
+        <div>
+            Major: <input type="text" name="major">
+        </div>
+        <div>
+            Year of Study: <input name="study_year" list="Study year options">
+            <datalist id="Study year options">
+                <option value="1st Year"></option>
+                <option value="2nd Year"></option>
+                <option value="3rd Year"></option>
+                <option value="4th Year"></option>
+                <option value="5th Year"></option>
+                <option value="Graduate"></option>
+            </datalist>
+        </div>
+        <div>
+            <input type="submit">
+        </div>
+    </form>
+
+</body>
+
+</html>

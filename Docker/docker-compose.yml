@@ -1,17 +1,40 @@
 version: '3'
 services:
-  web_app:
+  web_app1:
+    build: ./webapp1
+    expose:
+      - 80
     networks:
       web_app_project_net:
-        ipv4_address: 10.0.0.2
-  waf:
+        ipv4_address: 10.0.0.5
+  web_app2:
+    build: ./webapp2
+    expose:
+      - 80
+    networks:
+      web_app_project_net:
+        ipv4_address: 10.0.0.6
+  waf1:
+    build: ./modsecwaf1
+    expose:
+      - 443
     networks:
       web_app_project_net:
         ipv4_address: 10.0.0.3
-  loadbalancer:
+  waf2:
+    build: ./modsecwaf2
+    expose:
+      - 443
     networks:
       web_app_project_net:
         ipv4_address: 10.0.0.4
+  loadbalancer:
+    build: ./loadbalancer
+    ports:
+      - 443:443
+    networks:
+      web_app_project_net:
+        ipv4_address: 10.0.0.2
 networks:
   web_app_project_net:
     ipam:
