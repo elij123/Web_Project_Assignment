@@ -3,10 +3,8 @@
 
 - name: Install php-cgi
   ansible.builtin.apt:
-    name: php8.1-cgi
+    name: php-cgi
     state: present
-  environment:
-    DEBIAN_FRONTEND: noninteractive
 
 - name: Install python3
   ansible.builtin.apt:
@@ -26,33 +24,24 @@
   ansible.builtin.pip:
     name: pytz
 
-- name: Create a directory
-  ansible.builtin.file:
-    path: /var/web_files
-    state: directory
-
 - name: Copy the python script
   ansible.builtin.copy:
     src: python_http_server.py
-    dest: /var/web_files/
+    dest: /home/ubuntu
 
 - name: Copy the web static files
   ansible.builtin.copy:
     src: web_files/
-    dest: /var/web_files/
+    dest:
 
 - name: Copy the php configuration
   ansible.builtin.copy:
     src: php.ini
-    dest: /etc/php/8.1/cgi/php.ini
 
 - name: Copy the service unit script
   ansible.builtin.copy:
-    src: ansibletest.service
-    dest: /etc/systemd/system/
+    src: 
 
-- name: Enable and Start the service
-  ansible.builtin.systemd:
-    name: ansibletest
-    enabled: true
-    state: started
+- name: Run the server using HTTP on port 80
+  ansible.builtin.script:
+    cmd: python3 python_http_server.py 127.0.0.1 80

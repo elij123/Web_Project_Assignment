@@ -140,7 +140,8 @@ class http_session:
 
 # Parses URI from request line
     def request_target(self,input_str):
-        current_dir = os.getcwd()
+        current_dir= "/var/web_files"
+        os.chdir(current_dir)
         if re.match("/", input_str) != None:
             if input_str == "/":
                 URI_path = "/index.html"
@@ -555,7 +556,7 @@ def http_conn_handler(conn):
 
 
 def main(
-    ip_addr_listen: str, port_listen: int, x509_file_path=None, private_key_path=None,
+    ip_addr_listen: str="", port_listen: int=80, x509_file_path=None, private_key_path=None,
 ):
     try:
         server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

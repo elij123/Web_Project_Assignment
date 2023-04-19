@@ -1,5 +1,23 @@
 ---
 # tasks file for web_server_python_https
+
+- name: Install php-cgi
+  ansible.builtin.apt:
+    name: php8.1-cgi
+    state: present
+  environment:
+    DEBIAN_FRONTEND: noninteractive
+
+- name: Install python3
+  ansible.builtin.apt:
+    name: python3
+    state: present
+
+- name: Install pip
+  ansible.builtin.apt:
+    name: python3-pip
+    state: present
+
 - name: Install typer using pip
   ansible.builtin.pip:
     name: "typer[all]"
@@ -8,7 +26,48 @@
   ansible.builtin.pip:
     name: pytz
 
-- name: Run the server using HTTPS on port 8080
-  ansible.builtin.script:
-    cmd: python3 python_https_server.py 127.0.0.1 8080 project.crt project.key
+- name: Create a directory
+  ansible.builtin.file:
+    path: /var/web_files
+    state: directory
 
+- name: Create a directory for the certs
+  ansible.builtin.file:
+    path: /usr/web_certs
+    state: directory
+
+- name: Copy the key file
+  ansible.builtin.copy:
+    src: server.key
+    dest: /usr/web_certs/
+
+- name: Copy ther cert file
+  ansible.builtin.copy:
+    src: server.crt
+    dest: /usr/web_certs/
+
+- name: Copy the python script
+  ansible.builtin.copy:
+    src: python_https_server.py
+    dest: /var/web_files/
+
+- name: Copy the web static files
+  ansible.builtin.copy:
+    src: web_files/
+    dest: /var/web_files/
+
+- name: Copy the php configuration
+  ansible.builtin.copy:
+    src: php.ini
+    dest: /etc/php/8.1/cgi/php.ini
+
+- name: Copy the service unit script
+  ansible.builtin.copy:
+    src: ansibletesttls.service
+    dest: /etc/systemd/system/
+
+- name: Enable and Start the service
+  ansible.builtin.systemd:
+    name: ansibletesttls
+    enabled: true
+    state: started

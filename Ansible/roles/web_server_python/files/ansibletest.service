@@ -1,0 +1,10 @@
+[Unit]
+Description=Startup service for Python Web Server
+
+[Service]
+Type=exec
+ExecStart=/usr/bin/python3 /var/web_files/python_http_server.py
+
+[Install]
+WantedBy=multi-user.target
+

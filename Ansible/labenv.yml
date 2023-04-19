@@ -1,1 +1,16 @@
-[webproject]
+[webproject] # Put your IP addresses here
+172.31.87.249
+172.31.81.202
+
+[webproject:vars]
+# Put username here
+ansible_user=ubuntu
+# Put password here
+#ansible_password=password
+# Not needed. Used for testing
+ansible_ssh_private_key_file=/home/ubuntu/Ansible_web.cer
+# Privilege Escalation
+ansible_become=yes
+# Put become password here
+#ansible_become_password=become_password
+

@@ -1,7 +1,6 @@
 ---
 - hosts: webproject
-  var_files: vault_project_file
   gather_facts: no
   roles:
-    - web_server_project
+    - web_server_python
 

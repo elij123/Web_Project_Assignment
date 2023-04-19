@@ -1,0 +1,10 @@
+[Unit]
+Description=Startup service for Python Web Server
+
+[Service]
+Type=exec
+ExecStart=/usr/bin/python3 /var/web_files/python_https_server.py --port-listen 443 --x509-file-path "/usr/web_certs/server.crt" --private-key-path "/usr/web_certs/server.key"
+
+[Install]
+WantedBy=multi-user.target
+
