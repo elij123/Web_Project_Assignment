@@ -1,7 +1,7 @@
 FROM ubuntu:jammy
 RUN ["apt", "update"]
 ENV DEBIAN_FRONTEND=noninteractive
-RUN ["apt", "install", "-y", "php-cgi"]
+RUN ["apt", "install", "-y", "php8.1-cgi"]
 RUN ["apt", "install", "-y", "python3"]
 RUN ["apt", "install", "-y", "python3-pip"]
 RUN ["pip", "install", "pytz"]
