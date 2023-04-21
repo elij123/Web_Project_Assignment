@@ -1,0 +1,14 @@
+This program implements the HTTP protocol as per RFC 7230 and RFC 7231. The TLS feature can be 
+activated by providing the file paths for the x509 certificate and its corresponding private key.
+The program can also execute PHP files by using the PHP CGI program installed separately.
+
+Usage for HTTPS:
+python3 http_request_server.py --ip-addr-listen <Host's IP address> --port-listen <Port Number>
+--x509-file-path <File path of the x509 certificate> --private-key-path <File path of the private key>
+
+Usage for HTTP:
+python3 http_request_server.py --ip-addr-listen <Host's IP address> --port-listen <Port Number>
+
+Dependencies used:
+- typer  Shell install command: pip install "typer[all]"
+- pytz   Shell install command: pip install pytz
