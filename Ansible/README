@@ -1,0 +1,8 @@
+Shell Commands for deploying the web server as a systemd service and then starting
+the HTTP server.
+
+HTTP with TLS:
+ansible-playbook -i labenv.yml https_role.yml
+
+HTTP:
+ansible-playbook -i labenv.yml http_role.yml

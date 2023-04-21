@@ -37,11 +37,13 @@ port = re.compile("[\d]*", re.ASCII)
 tz_NY = pytz.timezone("America/New_York")
 # Minor HTTP version
 server_minor_ver = 1
+# regex for tokens in the HTTP protocol
 token_regex = re.compile("[!#$%&’*+\-.^‘|~\w]+", re.ASCII)
 # Regex for the URI in the request
 absolute_path_regex = re.compile(
     "(/([\w.\-~]|[%][0-9A-Fa-f][0-9A-Fa-f]|[!$&'()*+,;=]|[:]|[@])*)+", re.ASCII,
 )
+# Regex for validating the string of the URI
 query_regex = re.compile(
     "([\w.\-~]|[%][0-9A-Fa-f][0-9A-Fa-f]|[!$&'()*+,;=]|[:]|[@]|[/]|[?])*", re.ASCII,
 )
@@ -64,6 +66,7 @@ class ContentLengthNotFound(Exception):
 class MethodNotImplemented(Exception):
     pass
 
+
 class http_session:
     def __init__(self,):
         self.http_body = None
@@ -73,13 +76,13 @@ class http_session:
         self.http_fullpath = None
         self.http_query = None
 
-        # Logger
+        # Logger for HTTP requests
+
     def http_request_logger(self, request_line):
         with open("http_log.txt", "a") as http_log:
             datetime_NY = datetime.now(tz_NY)
             datetime_NY_str = datetime_NY.strftime("%d %b, %Y, %H:%M:%S")
             http_log.write(datetime_NY_str + " HTTP Request " + request_line + CRLF)
-
 
     # Parses HTTP request
     def http_request_message(self, input_http_str):
@@ -87,6 +90,7 @@ class http_session:
             print(input_http_str)
             first_CRLF = input_http_str.find(CRLF)
             if first_CRLF != -1:
+                # Parses the request line and the headers separately
                 self.request_start_line_http(input_http_str[:first_CRLF])
                 self.header_block_http(input_http_str[first_CRLF + 2 :])
         except BadRequestException:
@@ -104,9 +108,8 @@ class http_session:
         finally:
             return self.http_response_to_send
 
-
     # Parses HTTP Request Line
-    def request_start_line_http(self,input_str):
+    def request_start_line_http(self, input_str):
         if input_str.find(" ") != -1:
             str_segments = input_str.split(" ")
             self.http_method(str_segments[0])
@@ -115,10 +118,8 @@ class http_session:
             self.http_request_logger(input_str)
         else:
             raise BadRequestException
-        
 
-
-    # HTTP responses for different HTTP request
+    # HTTP responses for different HTTP methods
     def http_method(self, input: str):
         if re.fullmatch(token_regex, input) != None:
             if input == "GET":
@@ -135,47 +136,52 @@ class http_session:
                 raise MethodNotImplemented
         else:
             raise BadRequestException
-        
 
-
-# Parses URI from request line
-    def request_target(self,input_str):
-        current_dir= "/var/web_files"
+    # Parses URI from request line
+    def request_target(self, input_str):
+        # Default Root Directory
+        current_dir = "/var/web_files"
         os.chdir(current_dir)
         if re.match("/", input_str) != None:
+            # Default index file
             if input_str == "/":
                 URI_path = "/index.html"
-                self.http_fullpath = ( current_dir + URI_path )
+                self.http_fullpath = current_dir + URI_path
                 self.location_header_path = URI_path
             else:
                 if input_str.find("?") != -1:
+                    # dividing the string into URI and query string
                     input_str_seg = input_str.split("?")
                     URI_path = input_str_seg[0]
                     query_str = input_str_seg[1]
+                    # Validates URI path
                     if re.fullmatch(absolute_path_regex, URI_path) == None:
                         raise BadRequestException
+                    # Validates query string
                     if re.fullmatch(query_regex, query_str) == None:
                         raise BadRequestException
-                    self.http_fullpath = ( current_dir + URI_path )
+                    self.http_fullpath = current_dir + URI_path
                     self.location_header_path = URI_path
                     self.http_query = query_str
                 else:
                     URI_path = input_str
                     if re.fullmatch(absolute_path_regex, URI_path) == None:
                         raise BadRequestException
-                    self.http_fullpath = ( current_dir + URI_path )
+                    self.http_fullpath = current_dir + URI_path
                     self.location_header_path = URI_path
         else:
             raise BadRequestException
 
-
     # Parses http version
-    def http_version(self,input_str):
+    def http_version(self, input_str):
         global server_minor_ver
+        # Regex for the HTTP version
         if re.fullmatch("HTTP/[\d].[\d]", input_str, re.ASCII) != None:
             segments = input_str.split("/")
             version_no = segments[1]
             version_no_seg = version_no.split(".")
+
+            # Splits the protocol version and validates it
             if (
                 int(version_no_seg[0]) != 1
                 or int(version_no_seg[1]) > 1
@@ -186,7 +192,6 @@ class http_session:
         else:
             raise BadRequestException
 
-
     # Parses Header field
     def header_block_http(self, header_block_str):
         body_index = None
@@ -195,6 +200,7 @@ class http_session:
         header_CRLF_index = header_block_str.find(CRLF)
         while header_CRLF_index != -1:
             header_temp_str = header_block_str[: header_CRLF_index + 2]
+            # Validates the structure of the header field
             header_re_test = re.fullmatch(
                 "[!#$%&’*+\-.^‘|~\w]+:( |\t)*([\S* ](( |\t)+[\S* ])?)*( |\t)*" + CRLF,
                 header_temp_str,
@@ -209,6 +215,7 @@ class http_session:
                     host_str = re.fullmatch(
                         "host", temp[0], re.IGNORECASE
                     ).string.lower()
+                # Stores the header in a Python dictionary
                 http_headers_dict[temp[0].lower()] = temp[1].strip()
             # Checks for second CRLF to indicate end of header block
             if header_block_str[header_CRLF_index + 2 : header_CRLF_index + 4] == CRLF:
@@ -243,16 +250,33 @@ class http_session:
                 raise BadRequestException
         else:
             raise BadRequestException
+
         self.http_response_to_send = self.http_request_method(
-            self.http_fullpath, http_headers_dict, self.http_response_to_send, self.http_body
+            self.http_fullpath,
+            http_headers_dict,
+            self.http_response_to_send,
+            self.http_body,
         )
 
-    # Running PHP for POST request
+    # Running PHP CGI on PHP files for POST request
     def php_exec_post(self, php_fname, length, body_php):
         if length == len(body_php):
-            php_post_env = {"GATEWAY_INTERFACE":'CGI/1.1', "SERVER_PROTOCOL":'HTTP/1.1', "SCRIPT_FILENAME":f'{php_fname}', "REQUEST_METHOD":'POST', "REMOTE_HOST":'127.0.0.1', "CONTENT_LENGTH":f'{length}', "BODY":f'{body_php}', "CONTENT_TYPE":'application/x-www-form-urlencoded'}
+            php_post_env = {
+                "GATEWAY_INTERFACE": "CGI/1.1",
+                "SERVER_PROTOCOL": "HTTP/1.1",
+                "SCRIPT_FILENAME": f"{php_fname}",
+                "REQUEST_METHOD": "POST",
+                "REMOTE_HOST": "127.0.0.1",
+                "CONTENT_LENGTH": f"{length}",
+                "BODY": f"{body_php}",
+                "CONTENT_TYPE": "application/x-www-form-urlencoded",
+            }
             out = subprocess.run(
-                "exec echo $BODY | php-cgi", capture_output=True, text=True, shell=True, env=php_post_env
+                "exec echo $BODY | php-cgi",
+                capture_output=True,
+                text=True,
+                shell=True,
+                env=php_post_env,
             ).stdout.split("\n\n")
             content_type_out = out[0]
             body_out = out[1]
@@ -260,32 +284,35 @@ class http_session:
         else:
             raise BadRequestException
 
-
-    # Running PHP for GET request
+    # Running PHP CGI on PHP files for GET request
     def php_exec_get(self, php_fname, php_query):
         if php_query is None:
             cmd_str = f"php-cgi {php_fname}"
         else:
             cmd_str = f"php-cgi {php_fname}" + " " + " ".join(php_query.split("&"))
-        out = subprocess.run(cmd_str, capture_output=True, text=True, shell=True).stdout.split("\n\n")
+        out = subprocess.run(
+            cmd_str, capture_output=True, text=True, shell=True
+        ).stdout.split("\n\n")
         content_type_out = out[0]
         body_out = out[1]
         return (content_type_out, body_out)
 
-
     # Request Methods
-    def GET_request(self,filepath, headers_dict, response, body):
+    # Retrieves the content of a file from the server
+    def GET_request(self, filepath, headers_dict, response, body):
         if response != None:
             return response
         try:
             filepath_seg = filepath.split("/")
             filename_seg = filepath_seg[len(filepath_seg) - 1].split(".")
             file_ext = filename_seg[len(filename_seg) - 1]
+            # Sends the content of the file
             if file_ext.lower() != "php":
                 requested_file = open(filepath, "rb")
                 resp_body = requested_file.read().decode("UTF-8").rstrip()
                 response = http_response_200(resp_body, len(resp_body))
             else:
+                # Sends the result of the execution of the PHP file
                 requested_file = open(filepath, "r")
                 php_output = self.php_exec_get(filepath, self.http_query)
                 response = http_response_200(php_output[1], len(php_output[1]))
@@ -305,17 +332,20 @@ class http_session:
             requested_file.close()
             return response
 
-
+    # Uploads a file to the server
     def PUT_request(self, filepath, headers_dict, response, body):
         if response != None:
             return response
         try:
+            # Testing the existence of a file
+            # If a file exists, it is updated
             if os.access(filepath, os.F_OK):
                 requested_file = open(filepath, "wb")
                 requested_file.write(bytes(body, "UTF-8"))
                 requested_file.close()
                 response = http_response_204()
             else:
+                # If a file does not exist, it is created
                 requested_file = open(filepath, "wb")
                 requested_file.write(bytes(body, "UTF-8"))
                 requested_file.close()
@@ -330,14 +360,17 @@ class http_session:
             response = http_response_500()
             return response
 
-
+    # Changes the content within the web server
     def POST_request(self, filepath, headers_dict, response, body):
         if response != None:
             return response
         try:
             if headers_dict["content-length"]:
                 requested_file = open(filepath, "r")
-                php_output = self.php_exec_post(filepath, int(headers_dict["content-length"]), body)
+                # Sends the result of the execution of the PHP file
+                php_output = self.php_exec_post(
+                    filepath, int(headers_dict["content-length"]), body
+                )
                 response = http_response_200(php_output[1], len(php_output[1]))
             else:
                 raise ContentLengthNotFound
@@ -357,7 +390,7 @@ class http_session:
             requested_file.close()
             return response
 
-
+    # Deletes a file from the web server
     def DELETE_request(self, filepath, headers_dict, response, body):
         if response != None:
             return response
@@ -376,8 +409,8 @@ class http_session:
             response = http_response_200(text, len(text))
             return response
 
-
-    def HEAD_request(self,filepath, headers_dict, response, body):
+    # Only the headers of the HTTP response for a GET request is sent
+    def HEAD_request(self, filepath, headers_dict, response, body):
         if response != None:
             return response
         try:
@@ -389,6 +422,7 @@ class http_session:
                 resp_body = requested_file.read().decode("UTF-8").rstrip()
                 response = http_response_200_head(len(resp_body))
             else:
+                # Executes the PHP file
                 php_output = self.php_exec_get(filepath, self.http_query)
                 response = http_response_200_head(len(php_output[1]))
         except FileNotFoundError:
@@ -403,7 +437,6 @@ class http_session:
             requested_file.read()
             requested_file.close()
             return response
-
 
 
 # HTTP responses for 200(OK)
@@ -424,7 +457,7 @@ def http_response_204():
     return resp
 
 
-# Bad Request - error
+# 400 Bad Request - exception
 def http_response_400():
     resp = f"HTTP/1.{server_minor_ver} 400 Bad Request\r\n"
     resp += "User-Agent: Python/Ubuntu 22.04 LTS\r\n"
@@ -436,7 +469,7 @@ def http_response_400():
     return resp
 
 
-# HTTP HEAD Response
+# 200 HTTP HEAD Response
 def http_response_200_head(body_len):
     resp = f"HTTP/1.{server_minor_ver} 200 OK\r\n"
     resp += "User-Agent: Python/Ubuntu 22.04 LTS\r\n"
@@ -446,7 +479,7 @@ def http_response_200_head(body_len):
     return resp
 
 
-# Internal Server Error - error
+# 500 Internal Server Error - exception
 def http_response_500():
     resp = f"HTTP/1.{server_minor_ver} 500 Internal Server Error\r\n"
     resp += "User-Agent: Python/Ubuntu 22.04 LTS\r\n"
@@ -458,7 +491,7 @@ def http_response_500():
     return resp
 
 
-# PUT success code
+# 201 PUT success code
 def http_response_201(put_location, put_body):
     resp = f"HTTP/1.{server_minor_ver} 201 Created\r\n"
     resp += "User-Agent: Python/Ubuntu 22.04 LTS\r\n"
@@ -470,7 +503,7 @@ def http_response_201(put_location, put_body):
     return resp
 
 
-# No Permission to access file - error
+# 403 No Permission to access file - exception
 def http_response_403():
     resp = f"HTTP/1.{server_minor_ver} 403 Access Denied\r\n"
     resp += "User-Agent: Python/Ubuntu 22.04 LTS\r\n"
@@ -482,7 +515,7 @@ def http_response_403():
     return resp
 
 
-# Not Found - error
+# 404 Not Found - exception
 def http_response_404():
     resp = f"HTTP/1.{server_minor_ver} 404 Not Found\r\n"
     resp += "User-Agent: Python/Ubuntu 22.04 LTS\r\n"
@@ -494,7 +527,7 @@ def http_response_404():
     return resp
 
 
-# POST - No Content Length - Error
+# 411 POST - No Content Length - Exception
 def http_response_411():
     resp = f"HTTP/1.{server_minor_ver} 411 Length Required\r\n"
     resp += "User-Agent: Python/Ubuntu 22.04 LTS\r\n"
@@ -502,7 +535,7 @@ def http_response_411():
     return resp
 
 
-# HTTP Method Not Implemented - Error
+# 501 HTTP Method Not Implemented - Exception
 def http_response_501():
     resp = f"HTTP/1.{server_minor_ver} 501 HTTP Method Not Supported\r\n"
     resp += "User-Agent: Python/Ubuntu 22.04 LTS\r\n"
@@ -514,7 +547,7 @@ def http_response_501():
     return resp
 
 
-# Version not supported - Error
+# 505 Version not supported - Exception
 def http_response_505():
     resp = f"HTTP/1.{server_minor_ver} 505 Version Not Supported\r\n"
     resp += "User-Agent: Python/Ubuntu 22.04 LTS\r\n"
@@ -526,6 +559,7 @@ def http_response_505():
     return resp
 
 
+# Creates a connection for HTTP with TLS
 def https_conn_handler(conn, x509, privatekey):
     http_obj = http_session()
     with warnings.catch_warnings():
@@ -543,6 +577,7 @@ def https_conn_handler(conn, x509, privatekey):
     tls_conn.close()
 
 
+# Creates a connection for HTTP
 def http_conn_handler(conn):
     http_obj = http_session()
     resp = ""
@@ -555,10 +590,15 @@ def http_conn_handler(conn):
     conn.close()
 
 
+# Receives the command line arguments from the user
 def main(
-    ip_addr_listen: str="", port_listen: int=80, x509_file_path=None, private_key_path=None,
+    ip_addr_listen: str = "",
+    port_listen: int = 80,
+    x509_file_path=None,
+    private_key_path=None,
 ):
     try:
+        # Creates Network sockets to receive TCP connections from clients
         server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         server.bind((ip_addr_listen, port_listen))
         server.listen(5)
@@ -581,11 +621,6 @@ def main(
     except Exception as error:
         print(error)
         server.close()
-
-    # with open(file_name, "rb") as http_request_txt:
-    #     request_text = http_request_txt.read().decode("UTF-8")
-    #     http_request_message(request_text)
-    #     print(http_response_to_send)
 
 
 if __name__ == "__main__":

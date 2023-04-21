@@ -1,10 +1,12 @@
-This program implements the HTTP protocol as per RFC 7230 and RFC 7231. The TLS feature can be 
-activated by providing the file paths for the x509 certificate and its corresponding private key.
-The program can also execute PHP files by using the PHP CGI program installed separately.
+This program implements the HTTP protocol as per RFC 7230 and RFC 7231. HTTP with TLS can be activated by providing the file paths for the x509 certificate and its corresponding private key.
+
+Prerequisite:
+A directory called 'web_files' must be created inside the /var directory and HTML, CSS
+and PHP files must be stored within it since this is a fixed root directory for this 
+HTTP server.
 
 Usage for HTTPS:
-python3 http_request_server.py --ip-addr-listen <Host's IP address> --port-listen <Port Number>
---x509-file-path <File path of the x509 certificate> --private-key-path <File path of the private key>
+python3 http_request_server.py --ip-addr-listen <Host's IP address> --port-listen <Port Number> --x509-file-path <File path of the x509 certificate> --private-key-path <File path of the private key>
 
 Usage for HTTP:
 python3 http_request_server.py --ip-addr-listen <Host's IP address> --port-listen <Port Number>
