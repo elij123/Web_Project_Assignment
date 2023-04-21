@@ -1,6 +1,6 @@
 [webproject] # Put your IP addresses here
-172.31.87.249
-172.31.81.202
+172.31.91.106
+172.31.94.27
 
 [webproject:vars]
 # Put username here

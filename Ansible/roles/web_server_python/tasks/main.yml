@@ -8,6 +8,10 @@
   environment:
     DEBIAN_FRONTEND: noninteractive
 
+- name: Update package list
+  ansible.builtin.apt:
+    update-cache: true
+
 - name: Install python3
   ansible.builtin.apt:
     name: python3
