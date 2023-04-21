@@ -45,7 +45,7 @@
     src: server.key
     dest: /usr/web_certs/
 
-- name: Copy ther cert file
+- name: Copy the cert file
   ansible.builtin.copy:
     src: server.crt
     dest: /usr/web_certs/
